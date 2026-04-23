@@ -332,6 +332,30 @@ def test_list_and_show_generators(tmp_path: Path, capsys) -> None:
         "fallback_generators",
     ]
 
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "show-generator",
+                "--generator",
+                "openai_responses",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    generator_rendered = json.loads(capsys.readouterr().out)
+    assert generator_rendered["generator_id"] == "openai_responses"
+    assert generator_rendered["generator_option_keys"] == [
+        "model",
+        "reasoning_effort",
+        "timeout_seconds",
+        "base_url",
+        "proposal_scope",
+        "max_operations",
+        "fallback_generators",
+    ]
+
 
 def test_generate_proposal_with_failure_summary_generator_without_edit_plan(
     tmp_path: Path,
@@ -482,6 +506,10 @@ def test_generate_proposal_with_openai_responses_generator(
         request_payload = kwargs["request_payload"]
         assert request_payload["model"] == "gpt-5.1"
         assert request_payload["reasoning"]["effort"] == "high"
+        assert "up to 8 operations" in request_payload["instructions"]
+        prompt_payload = json.loads(request_payload["input"][0]["content"][0]["text"])
+        assert prompt_payload["proposal_profile"]["scope"] == "broad"
+        assert prompt_payload["proposal_profile"]["max_operations"] == 8
         return {
             "id": "resp_cli",
             "output_text": json.dumps(
@@ -525,6 +553,10 @@ def test_generate_proposal_with_openai_responses_generator(
                 "model=gpt-5.1",
                 "--generator-option",
                 "reasoning_effort=high",
+                "--generator-option",
+                "proposal_scope=broad",
+                "--generator-option",
+                "max_operations=8",
                 "--target-root",
                 str(target_root),
                 "--root",
@@ -538,6 +570,8 @@ def test_generate_proposal_with_openai_responses_generator(
     assert rendered["proposal"]["generator_id"] == "openai_responses"
     assert rendered["proposal"]["hypothesis"] == "Refine service greeting"
     assert rendered["proposal"]["generator_metadata"]["provider"] == "openai"
+    assert rendered["proposal"]["generator_metadata"]["proposal_scope"] == "broad"
+    assert rendered["proposal"]["generator_metadata"]["max_operations"] == 8
 
 
 def test_generate_proposal_with_local_command_generator(

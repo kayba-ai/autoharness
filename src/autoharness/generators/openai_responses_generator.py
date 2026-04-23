@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from ..editing import EditPlan, edit_plan_from_dict
+from ..editing import EditPlan
 from ..proposal_context import ProposalGenerationContext
 from .base import (
     GeneratedProposal,
@@ -40,6 +40,28 @@ _PRIORITY_SUFFIXES = {
     "prompt": (".md", ".txt", ".yaml", ".yml"),
     "source": (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"),
 }
+_PROPOSAL_SCOPE_VALUES = ("conservative", "balanced", "broad")
+_DEFAULT_MAX_OPERATIONS_BY_SCOPE = {
+    "conservative": 2,
+    "balanced": 6,
+    "broad": 10,
+}
+_SNAPSHOT_FILE_LIMIT_BY_SCOPE = {
+    "conservative": 80,
+    "balanced": 120,
+    "broad": 160,
+}
+_SNAPSHOT_FILE_SAMPLE_LIMIT_BY_SCOPE = {
+    "conservative": 8,
+    "balanced": 12,
+    "broad": 16,
+}
+_SNAPSHOT_FILE_CHAR_LIMIT_BY_SCOPE = {
+    "conservative": 4000,
+    "balanced": 6000,
+    "broad": 8000,
+}
+_SNAPSHOT_PATH_LIST_LIMIT = 40
 
 
 class OpenAIResponsesProposalGenerator:
@@ -76,11 +98,25 @@ class OpenAIResponsesProposalGenerator:
             request.metadata.get("timeout_seconds")
             or os.environ.get("AUTOHARNESS_OPENAI_TIMEOUT_SECONDS", "60")
         )
-        prompt_payload = _build_prompt_payload(context=context, request=request)
+        proposal_scope = _resolve_proposal_scope(request.metadata)
+        max_operations = _resolve_positive_int_setting(
+            request.metadata,
+            key="max_operations",
+            env_key="AUTOHARNESS_OPENAI_MAX_OPERATIONS",
+            default=_DEFAULT_MAX_OPERATIONS_BY_SCOPE[proposal_scope],
+        )
+        prompt_payload = _build_prompt_payload(
+            context=context,
+            request=request,
+            proposal_scope=proposal_scope,
+            max_operations=max_operations,
+        )
         request_payload = _build_openai_request_payload(
             model=model,
             reasoning_effort=reasoning_effort,
             prompt_payload=prompt_payload,
+            proposal_scope=proposal_scope,
+            max_operations=max_operations,
         )
         response_payload = _call_openai_responses_api(
             api_key=api_key,
@@ -140,10 +176,51 @@ class OpenAIResponsesProposalGenerator:
                 "provider_request_payload": request_payload,
                 "provider_response_payload": response_payload,
                 "provider_response_text": response_text,
+                "proposal_scope": proposal_scope,
+                "max_operations": max_operations,
                 "repair_steps": response_repair_steps + payload_repair_steps,
                 "usage": _extract_usage_summary(response_payload),
             },
         )
+
+
+def _resolve_proposal_scope(metadata: dict[str, Any]) -> str:
+    raw_value = metadata.get("proposal_scope")
+    if raw_value is None:
+        raw_value = os.environ.get("AUTOHARNESS_OPENAI_PROPOSAL_SCOPE", "balanced")
+    proposal_scope = str(raw_value).strip().lower()
+    if proposal_scope not in _PROPOSAL_SCOPE_VALUES:
+        raise ValueError(
+            "`openai_responses.proposal_scope` must be one of: "
+            + ", ".join(_PROPOSAL_SCOPE_VALUES)
+            + "."
+        )
+    return proposal_scope
+
+
+def _resolve_positive_int_setting(
+    metadata: dict[str, Any],
+    *,
+    key: str,
+    env_key: str,
+    default: int,
+) -> int:
+    raw_value = metadata.get(key)
+    if raw_value is None:
+        raw_value = os.environ.get(env_key)
+    if raw_value is None or raw_value == "":
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"`openai_responses.{key}` must be a positive integer."
+        ) from exc
+    if value < 1:
+        raise ValueError(
+            f"`openai_responses.{key}` must be a positive integer."
+        )
+    return value
 
 
 def _call_openai_responses_api(
@@ -250,11 +327,16 @@ def _build_openai_request_payload(
     model: str,
     reasoning_effort: str,
     prompt_payload: dict[str, Any],
+    proposal_scope: str,
+    max_operations: int,
 ) -> dict[str, Any]:
     return {
         "model": model,
         "reasoning": {"effort": reasoning_effort},
-        "instructions": _proposal_instructions(),
+        "instructions": _proposal_instructions(
+            proposal_scope=proposal_scope,
+            max_operations=max_operations,
+        ),
         "input": [
             {
                 "role": "user",
@@ -278,13 +360,22 @@ def _build_prompt_payload(
     *,
     context: ProposalGenerationContext,
     request: ProposalGenerationRequest,
+    proposal_scope: str,
+    max_operations: int,
 ) -> dict[str, Any]:
     intervention_class = request.intervention_class or "source"
     target_root = Path(context.target_root)
     return {
-        "task": "Generate one conservative autoharness edit plan.",
+        "task": _proposal_task(proposal_scope),
         "request": request.to_dict(),
         "context": context.to_dict(),
+        "proposal_profile": {
+            "scope": proposal_scope,
+            "max_operations": max_operations,
+            "single_hypothesis": True,
+            "allow_multi_file": proposal_scope != "conservative",
+            "prefer_supporting_edits": True,
+        },
         "benchmark_context": {
             "benchmark_target": context.benchmark_target,
             "selected_preset": context.selected_preset,
@@ -296,18 +387,33 @@ def _build_prompt_payload(
         "repo_snapshot": _collect_repo_snapshot(
             target_root=target_root,
             intervention_class=intervention_class,
+            proposal_scope=proposal_scope,
         ),
     }
 
 
-def _proposal_instructions() -> str:
+def _proposal_task(proposal_scope: str) -> str:
+    if proposal_scope == "conservative":
+        return "Generate one conservative autoharness edit plan."
+    if proposal_scope == "broad":
+        return (
+            "Generate one broad but coherent autoharness edit plan that may span "
+            "multiple supporting files."
+        )
     return (
+        "Generate one coherent autoharness edit plan that may include supporting "
+        "multi-file changes."
+    )
+
+
+def _proposal_instructions(*, proposal_scope: str, max_operations: int) -> str:
+    shared = (
         "You generate one AUTOHARNESS proposal as JSON. "
         "Return only JSON. "
         "The JSON must contain: hypothesis, summary, intervention_class, operations. "
         "Use only supported operation types: write_file and search_replace. "
         "Paths must stay relative to the target root. "
-        "Prefer one or two tightly scoped operations. "
+        "Every operation must support one coherent hypothesis rather than unrelated cleanup. "
         "Do not invent files outside the target root. "
         "When modifying an existing file, prefer search_replace with a precise search string. "
         "When creating a new file, use write_file. "
@@ -315,14 +421,40 @@ def _proposal_instructions() -> str:
         "from relative path to file content and autoharness will repair it. "
         "The summary should be short and specific."
     )
+    if proposal_scope == "conservative":
+        return (
+            shared
+            + " Prefer the smallest safe change set, typically one or two operations. "
+            + f"Do not exceed {max_operations} operations."
+        )
+    if proposal_scope == "broad":
+        return (
+            shared
+            + " Multi-file proposals are encouraged when they materially improve the harness. "
+            + "If the root cause spans code, config, prompts, middleware, or tests, include "
+            + "the supporting edits needed to keep the proposal internally consistent. "
+            + f"You may use up to {max_operations} operations, but avoid scattershot edits."
+        )
+    return (
+        shared
+        + " Multi-file proposals are allowed when they materially improve the harness. "
+        + "Include supporting config, prompt, middleware, or test updates when they are part "
+        + "of the same hypothesis. "
+        + f"You may use up to {max_operations} operations."
+    )
 
 
 def _collect_repo_snapshot(
     *,
     target_root: Path,
     intervention_class: str,
+    proposal_scope: str,
 ) -> dict[str, Any]:
     files: list[Path] = []
+    inventory_limit = _SNAPSHOT_FILE_LIMIT_BY_SCOPE[proposal_scope]
+    file_sample_limit = _SNAPSHOT_FILE_SAMPLE_LIMIT_BY_SCOPE[proposal_scope]
+    file_char_limit = _SNAPSHOT_FILE_CHAR_LIMIT_BY_SCOPE[proposal_scope]
+    inventory_truncated = False
     if target_root.exists():
         for path in sorted(target_root.rglob("*")):
             if not path.is_file():
@@ -330,7 +462,8 @@ def _collect_repo_snapshot(
             if any(part in _IGNORED_DIRS for part in path.parts):
                 continue
             files.append(path)
-            if len(files) >= 40:
+            if len(files) >= inventory_limit:
+                inventory_truncated = True
                 break
 
     priority_suffixes = _PRIORITY_SUFFIXES.get(intervention_class, ())
@@ -342,7 +475,7 @@ def _collect_repo_snapshot(
             str(path.relative_to(target_root)),
         ),
     )
-    sampled_files = prioritized[:6]
+    sampled_files = prioritized[:file_sample_limit]
     rendered_files = []
     language_counts: dict[str, int] = {}
     for path in sampled_files:
@@ -357,13 +490,18 @@ def _collect_repo_snapshot(
         rendered_files.append(
             {
                 "path": rel_path,
-                "content": text[:4000],
+                "content": text[:file_char_limit],
             }
         )
 
     return {
         "target_root": str(target_root),
         "file_count": len(files),
+        "inventory_truncated": inventory_truncated,
+        "prioritized_paths": [
+            str(path.relative_to(target_root))
+            for path in prioritized[:_SNAPSHOT_PATH_LIST_LIMIT]
+        ],
         "language_hints": sorted(
             language_counts,
             key=lambda suffix: (-language_counts[suffix], suffix),
@@ -375,19 +513,33 @@ def _collect_repo_snapshot(
 def _intervention_guidance(intervention_class: str) -> dict[str, Any]:
     guidance = {
         "prompt": {
-            "focus": "Prefer prompt text, templates, or prompt-routing changes.",
+            "focus": (
+                "Prefer prompt text, templates, or prompt-routing changes, with only the "
+                "supporting config or test edits needed to keep the proposal coherent."
+            ),
             "preferred_suffixes": [".md", ".txt", ".yaml", ".yml"],
         },
         "config": {
-            "focus": "Prefer config or flag changes before code changes.",
+            "focus": (
+                "Prefer config or flag changes before code changes, but include small "
+                "supporting source, prompt, or test edits when a config-only proposal "
+                "would be inconsistent."
+            ),
             "preferred_suffixes": [".json", ".yaml", ".yml", ".toml", ".ini"],
         },
         "middleware": {
-            "focus": "Prefer routing, orchestration, or glue-layer changes.",
+            "focus": (
+                "Prefer routing, orchestration, or glue-layer changes, including the "
+                "supporting source or config edits needed for one coherent change set."
+            ),
             "preferred_suffixes": [".py", ".ts", ".js", ".json"],
         },
         "source": {
-            "focus": "Prefer the smallest source change that addresses the failure slice.",
+            "focus": (
+                "Prefer one coherent source change set that addresses the failure slice, "
+                "including supporting tests, prompts, or config updates when they are part "
+                "of the same hypothesis."
+            ),
             "preferred_suffixes": [".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"],
         },
     }

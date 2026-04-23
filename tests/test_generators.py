@@ -201,6 +201,8 @@ def test_openai_responses_generator_uses_api_payload(
     target_root = tmp_path / "candidate"
     target_root.mkdir()
     (target_root / "service.py").write_text("print('hello')\n", encoding="utf-8")
+    (target_root / "router.py").write_text("def route():\n    return 'primary'\n", encoding="utf-8")
+    (target_root / "config.yaml").write_text("retries: 1\n", encoding="utf-8")
 
     main(["setup", "--output", str(settings)])
     main(
@@ -247,9 +249,15 @@ def test_openai_responses_generator_uses_api_payload(
         request_payload = kwargs["request_payload"]
         assert request_payload["model"] == "gpt-5.1"
         assert request_payload["reasoning"]["effort"] == "high"
+        assert "up to 7 operations" in request_payload["instructions"]
         prompt_payload = json.loads(request_payload["input"][0]["content"][0]["text"])
         assert prompt_payload["context"]["workspace_id"] == "demo"
-        assert prompt_payload["repo_snapshot"]["sampled_files"][0]["path"] == "service.py"
+        assert prompt_payload["proposal_profile"]["scope"] == "broad"
+        assert prompt_payload["proposal_profile"]["max_operations"] == 7
+        assert "service.py" in {
+            entry["path"] for entry in prompt_payload["repo_snapshot"]["sampled_files"]
+        }
+        assert len(prompt_payload["repo_snapshot"]["prioritized_paths"]) >= 3
         return {
             "id": "resp_test",
             "output_text": json.dumps(
@@ -285,7 +293,12 @@ def test_openai_responses_generator_uses_api_payload(
             strategy_id="greedy_failure_focus",
             source_mode="generator_loop",
             intervention_class="source",
-            metadata={"model": "gpt-5.1", "reasoning_effort": "high"},
+            metadata={
+                "model": "gpt-5.1",
+                "reasoning_effort": "high",
+                "proposal_scope": "broad",
+                "max_operations": "7",
+            },
         ),
     )
 
@@ -298,6 +311,8 @@ def test_openai_responses_generator_uses_api_payload(
     assert generated.metadata["provider"] == "openai"
     assert generated.metadata["response_id"] == "resp_test"
     assert generated.metadata["provider_request_payload"]["model"] == "gpt-5.1"
+    assert generated.metadata["proposal_scope"] == "broad"
+    assert generated.metadata["max_operations"] == 7
     assert generated.metadata["repair_steps"] == []
 
 

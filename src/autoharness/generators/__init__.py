@@ -106,6 +106,8 @@ _GENERATOR_CATALOG = {
             "reasoning_effort",
             "timeout_seconds",
             "base_url",
+            "proposal_scope",
+            "max_operations",
             "fallback_generators",
         ],
         "environment_variables": [
@@ -115,8 +117,13 @@ _GENERATOR_CATALOG = {
             "AUTOHARNESS_OPENAI_REASONING_EFFORT",
             "AUTOHARNESS_OPENAI_TIMEOUT_SECONDS",
             "AUTOHARNESS_OPENAI_BASE_URL",
+            "AUTOHARNESS_OPENAI_PROPOSAL_SCOPE",
+            "AUTOHARNESS_OPENAI_MAX_OPERATIONS",
         ],
-        "notes": "Requires an OpenAI API key via environment variable.",
+        "notes": (
+            "Requires an OpenAI API key via environment variable. Defaults to a balanced "
+            "multi-file proposal profile; tune with proposal_scope and max_operations."
+        ),
     },
 }
 
