@@ -22,6 +22,15 @@ autoharness adds experiment discipline on top:
 - durable registry lineage instead of branch history
 - room for screening, validation, and transfer gates
 
+## Design Direction
+
+This repo is the open-source outer-loop layer only. The intended next steps are:
+
+1. continue refining the campaign and registry model
+2. add benchmark adapters and eval runners
+3. add screening / validation / transfer stages
+4. add proposal generation and patch application behind the selected autonomy mode
+
 ## Autonomy Modes
 
 autoharness lets the operator choose how much authority the meta-agent gets.
@@ -104,15 +113,6 @@ This creates:
           campaign.json
           registry/
 ```
-
-## Design Direction
-
-This repo is the open-source outer-loop layer only. The intended next steps are:
-
-1. continue refining the campaign and registry model
-2. add benchmark adapters and eval runners
-3. add screening / validation / transfer stages
-4. add proposal generation and patch application behind the selected autonomy mode
 
 ## Stage Overrides
 
