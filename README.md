@@ -1,8 +1,8 @@
 # autoharness
 
-autoharness is a standalone control plane for improving agent harnesses directly.
+autoharness is a standalone control plane for improving agent harnesses directly with full scientific rigor.
 
-It does not train models or ship a built-in inner learning loop. It manages bounded or unbounded harness optimization campaigns over prompts, middleware, config, and selected source files.
+It does not train models, it manages bounded or unbounded harness optimization campaigns over prompts, middleware, config, and selected source files.
 
 ## Thesis
 
@@ -40,6 +40,36 @@ The current CLI defaults to `full` during setup, because some users want the sys
 - `track`: one comparable evaluation lane inside a workspace
 - `campaign`: one benchmark-scoped comparable unit with a pinned evaluator policy
 - `intervention`: one explicit change hypothesis, tagged by level and target
+
+## Install
+
+Recommended one-line install:
+
+```bash
+pipx install "git+https://github.com/kayba-ai/autoharness.git"
+```
+
+Then verify the CLI is available:
+
+```bash
+autoharness --help
+```
+
+If you do not use `pipx`, install into the user site-packages:
+
+```bash
+python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
+```
+
+For local development, use an editable checkout instead:
+
+```bash
+git clone https://github.com/kayba-ai/autoharness.git
+cd autoharness
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
 
 ## Quickstart
 
@@ -83,68 +113,6 @@ This repo is the open-source outer-loop layer only. The intended next steps are:
 2. add benchmark adapters and eval runners
 3. add screening / validation / transfer stages
 4. add proposal generation and patch application behind the selected autonomy mode
-
-## Status
-
-This scaffold currently includes:
-
-- autonomy policy setup
-- workspace bootstrapping
-- benchmark adapter catalog
-- `autoharness list-benchmarks --json` for machine-readable benchmark catalog inspection
-- `autoharness show-benchmark` for adapter-specific staging, parser, native artifact, and task-identity capability inspection
-- `autoharness init-benchmark-config` for adapter-owned starter config scaffolds and named presets
-- `autoharness show-benchmark-config` / `autoharness validate-benchmark-config` for standalone composed-config inspection and validation before execution
-- `autoharness list-generators` / `autoharness show-generator` for proposal generator catalog inspection and provider option discovery
-- implemented adapter runtime for `generic_command`, `pytest`, `harbor`, `tau2_bench`, `hal`, and `car_bench`
-- `autoharness run-benchmark` for direct adapter execution
-- repeated validation runs via `--repeat`, with optional seed stepping via `--seed-field`
-- parsed metrics via config-driven `metrics_parser`
-- parsed per-task outcomes via config-driven `task_results_parser`
-- adapter-declared task identity hints for stable case matching and tier-based weighting
-- native artifact ingestion for `tau2_bench`, `hal`, and `harbor`
-- parsed artifact provenance retained in benchmark payloads, iteration artifacts, and promotion records
-- stage-aware evaluation via `--stage {screening,validation,holdout,transfer}`
-- confidence-gated stage decisions for validation, holdout, and transfer
-- optional baseline comparison against an explicit record or the current champion
-- paired per-seed and per-task baseline comparison when the payload exposes aligned outcomes
-- file-backed benchmark records per track
-- `autoharness run-iteration` for one-hypothesis execution and workspace state updates
-- `autoharness plan-iteration` for policy-aware run command scaffolding before execution
-- `autoharness run-planned-iteration` to replay a saved plan JSON without rebuilding flags
-- edit-plan application with `proposal`, `bounded`, and `full` autonomy enforcement
-- transactional edit sessions that revert by default, with an explicit keep option
-- per-iteration `candidate.patch` artifacts
-- `autoharness promote` to replay a recorded candidate onto a target harness and mark it champion
-- track-level `champion.json` manifests that point at the active champion record, promotion patch, and provenance artifacts
-- track-level `promotion_policy.json` files that pin compare/promote thresholds for each track
-- `autoharness show-promotion-policy` and `autoharness set-promotion-policy` for operator-facing policy inspection and updates
-- track-level `track_policy.json` files that pin search, promotion, and regression benchmark targets per track
-- `autoharness show-track-policy` and `autoharness set-track-policy` for operator-facing benchmark routing updates
-- track and workspace policy support for `search`, `promotion`, and `regression` preset names in addition to benchmark ids
-- `autoharness show-track` and `autoharness set-track` for operator-facing track metadata, evaluator updates, and per-track campaign automation overrides
-- `autoharness list-preflight-checks` and `autoharness show-preflight-check` for discovering the built-in cheap preflight validation catalog
-- `autoharness run-campaign`, `autoharness run-workspace-campaigns`, `autoharness export-workspace-campaign-run-report`, `autoharness run-root-campaigns`, `autoharness export-root-campaign-run-report`, `autoharness resume-campaign`, `autoharness show-campaign`, `autoharness show-campaigns`, `autoharness show-campaign-report-file`, `autoharness validate-campaign-report-file`, `autoharness export-workspace-campaign-report`, `autoharness export-workspace-campaign-bundle`, `autoharness export-root-campaign-bundle`, `autoharness show-campaign-artifacts`, `autoharness export-campaign-report`, and `autoharness export-campaign-bundle` for resumable campaign execution, workspace-level and root-level campaign fan-out, campaign-level inspection, versioned batch-run and persisted-run exports, report-file reopening/validation, and portable campaign handoff artifacts
-- `autoharness show-workspace`, `autoharness set-workspace`, `autoharness archive-workspace`, and `autoharness purge-workspace` for workspace metadata, fallback benchmark routing, workspace-level campaign defaults, and lifecycle control
-- `autoharness show-root-summary` and `autoharness show-workspace-summary` for aggregate inspection across selected workspaces or one workspace
-- `autoharness export-root-summary`, `autoharness export-root-report`, `autoharness export-root-bundle`, `autoharness export-workspace-summary`, `autoharness export-workspace-report`, `autoharness export-workspace-bundle`, and `autoharness export-track-bundle` for versioned handoff artifacts
-- `autoharness show-bundle`, `autoharness validate-bundle`, `autoharness reindex-bundle`, and `autoharness import-bundle` for manifest-only inspection, validation, manifest repair, and relocation of exported workspace, track, and champion bundles, including manifest format normalization with `reindex-bundle --format json|yaml` and `import-bundle --target-format json|yaml`, plus recursive nested champion-bundle inspection, auditing, and restamping with `--recursive`
-- `autoharness show-tracks`, `autoharness create-track`, `autoharness archive-track`, `autoharness purge-track`, and `autoharness switch-track` for multi-track workspace lifecycle
-- `autoharness show-track-summary` for per-track record, promotion, and champion inspection
-- `autoharness show-records`, `autoharness export-records`, `autoharness show-record`, `autoharness show-promotions`, `autoharness export-promotions`, and `autoharness show-promotion` for direct record and promotion inspection
-- `autoharness generate-proposal`, `autoharness show-proposal`, `autoharness show-proposals`, `autoharness export-proposals`, `autoharness apply-proposal`, and `autoharness run-proposal` for proposal-first edit-plan preview, persistence, application, proposal-backed execution, and generator-driven proposal synthesis
-- `autoharness show-track-artifacts` for track-level file inspection
-- `autoharness show-iteration`, `autoharness show-iterations`, and `autoharness export-iterations` for iteration-level inspection and export
-- `autoharness show-champion` and `autoharness export-champion` for operator-facing champion inspection and bundle export
-- `autoharness compare-to-champion` to recompute stage and baseline deltas against the active champion
-- `autoharness promote-from-compare` to gate promotion on a fresh champion comparison instead of a separate manual step
-- adapter-aware copy staging for isolated candidate execution, with `auto` as the default mode
-- Harbor support for dataset, dataset path, task, and config entrypoints
-- adapter-specific staging signals for nested benchmark config paths in HAL and Tau2
-- campaign and intervention primitives
-- a CLI entrypoint
-
-It still does not manage true parallel distributed search or cross-root automation policy yet, but it now supports beam-style candidate sourcing and one level of orchestration above a single workspace.
 
 ## Stage Overrides
 
