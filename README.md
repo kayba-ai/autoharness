@@ -4,6 +4,8 @@
 
 # autoharness
 
+Let autoharness run overnight and come back to a stronger agent.
+
 autoharness improves agent harnesses by proposing or applying prompt, config, middleware, and source changes, running evals, and keeping or discarding candidates based on benchmark results.
 
 It is a control plane for an existing harness repo. You point it at a target root and a benchmark command; autoharness manages proposals, iterations, campaigns, and champion state under `.autoharness/`.
