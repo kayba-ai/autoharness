@@ -11,6 +11,20 @@ from .stats import paired_mean_confidence_interval
 
 StageName = Literal["screening", "validation", "holdout", "transfer"]
 StageDecisionMode = Literal["threshold", "confidence_interval"]
+_STABILITY_GATE_THRESHOLDS = {
+    "validation": {
+        "minimum_stability_score": 0.8,
+        "max_confidence_interval_width": 0.5,
+    },
+    "holdout": {
+        "minimum_stability_score": 0.85,
+        "max_confidence_interval_width": 0.45,
+    },
+    "transfer": {
+        "minimum_stability_score": 0.85,
+        "max_confidence_interval_width": 0.45,
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -182,6 +196,12 @@ def evaluate_stage_result(
         stability_summary = validation_summary.get("stability_summary")
         if isinstance(stability_summary, dict):
             result["stability_summary"] = dict(stability_summary)
+        stability_gate = _evaluate_stability_gate(
+            stage_policy=stage_policy,
+            validation_summary=validation_summary,
+        )
+        if stability_gate is not None:
+            result["stability_gate"] = stability_gate
 
     if payload.get("dry_run") is True:
         result["decision"] = "planned"
@@ -452,6 +472,73 @@ def compare_against_baseline(
         f"required improvement margin {min_improvement:.3f}."
     )
     return result
+
+
+def _evaluate_stability_gate(
+    *,
+    stage_policy: StagePolicy,
+    validation_summary: dict[str, Any],
+) -> dict[str, Any] | None:
+    thresholds = _STABILITY_GATE_THRESHOLDS.get(stage_policy.stage)
+    if thresholds is None:
+        return None
+
+    stability_summary = validation_summary.get("stability_summary")
+    if not isinstance(stability_summary, dict):
+        return None
+
+    stability_score = stability_summary.get("stability_score")
+    numeric_stability_score = (
+        float(stability_score)
+        if isinstance(stability_score, (int, float)) and not isinstance(stability_score, bool)
+        else None
+    )
+    confidence_interval = validation_summary.get("success_rate_confidence_interval")
+    confidence_interval_width = None
+    if isinstance(confidence_interval, dict):
+        lower = confidence_interval.get("lower")
+        upper = confidence_interval.get("upper")
+        if (
+            isinstance(lower, (int, float))
+            and not isinstance(lower, bool)
+            and isinstance(upper, (int, float))
+            and not isinstance(upper, bool)
+        ):
+            confidence_interval_width = float(upper) - float(lower)
+
+    minimum_stability_score = float(thresholds["minimum_stability_score"])
+    max_confidence_interval_width = float(thresholds["max_confidence_interval_width"])
+    reasons: list[str] = []
+    passed = True
+    if (
+        numeric_stability_score is not None
+        and numeric_stability_score < minimum_stability_score
+    ):
+        passed = False
+        reasons.append(
+            f"stability_score {numeric_stability_score:.3f} was below the minimum "
+            f"of {minimum_stability_score:.3f}"
+        )
+    if (
+        confidence_interval_width is not None
+        and confidence_interval_width > max_confidence_interval_width
+    ):
+        passed = False
+        reasons.append(
+            f"success-rate interval width {confidence_interval_width:.3f} exceeded the "
+            f"maximum of {max_confidence_interval_width:.3f}"
+        )
+
+    return {
+        "applies": True,
+        "passed": passed,
+        "flaky": bool(stability_summary.get("flaky")),
+        "stability_score": numeric_stability_score,
+        "minimum_stability_score": minimum_stability_score,
+        "confidence_interval_width": confidence_interval_width,
+        "max_confidence_interval_width": max_confidence_interval_width,
+        "reason": "; ".join(reasons) if reasons else "Validation stability satisfied the promotion gate.",
+    }
 
 
 def _compare_task_results(

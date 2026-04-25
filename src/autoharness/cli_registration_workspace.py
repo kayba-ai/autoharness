@@ -476,6 +476,7 @@ def register_workspace_parsers(subparsers) -> None:
 
     init_workspace = subparsers.add_parser(
         "init-workspace",
+        aliases=["init"],
         help="Create a new workspace skeleton for one optimization effort.",
     )
     _add_workspace_id_argument(init_workspace)

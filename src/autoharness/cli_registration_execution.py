@@ -10,6 +10,7 @@ from .cli_arguments import (
     _add_comparison_gate_arguments,
     _add_config_composition_arguments,
     _add_json_output_arguments,
+    _add_optional_workspace_id_argument,
     _add_plan_artifact_write_arguments,
     _add_repeat_seed_arguments,
     _add_required_adapter_argument,
@@ -291,7 +292,7 @@ def register_execution_parsers(
         "run-iteration",
         help="Run exactly one hypothesis inside an existing workspace and record it.",
     )
-    _add_workspace_id_argument(run_iteration)
+    _add_optional_workspace_id_argument(run_iteration)
     _add_required_adapter_argument(run_iteration)
     _add_config_composition_arguments(
         run_iteration,

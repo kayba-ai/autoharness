@@ -9,6 +9,7 @@ from .cli_arguments import (
     _add_json_output_arguments,
     _add_optional_format_argument,
     _add_optional_output_argument,
+    _add_optional_workspace_id_argument,
     _add_optional_track_selection_argument,
     _add_proposal_query_arguments,
     _add_required_adapter_argument,
@@ -62,7 +63,7 @@ def register_proposal_parsers(subparsers) -> None:
         "generate-proposal",
         help="Preview and persist one proposal artifact without running the benchmark.",
     )
-    _add_workspace_id_argument(generate_proposal)
+    _add_optional_workspace_id_argument(generate_proposal)
     _add_required_adapter_argument(generate_proposal)
     _add_config_composition_arguments(
         generate_proposal,
@@ -133,7 +134,7 @@ def register_proposal_parsers(subparsers) -> None:
         "show-proposal",
         help="Show one persisted proposal artifact.",
     )
-    _add_workspace_id_argument(show_proposal)
+    _add_optional_workspace_id_argument(show_proposal)
     _add_optional_track_selection_argument(show_proposal)
     _add_required_proposal_id_argument(show_proposal)
     _add_workspace_root_argument(show_proposal)
@@ -148,7 +149,7 @@ def register_proposal_parsers(subparsers) -> None:
         "apply-proposal",
         help="Apply one saved proposal to a target harness root and keep the edits.",
     )
-    _add_workspace_id_argument(apply_proposal)
+    _add_optional_workspace_id_argument(apply_proposal)
     _add_optional_track_selection_argument(apply_proposal)
     _add_required_proposal_id_argument(apply_proposal)
     _add_workspace_root_argument(apply_proposal)
@@ -169,7 +170,7 @@ def register_proposal_parsers(subparsers) -> None:
         "run-proposal",
         help="Execute one saved proposal through the existing run-iteration flow.",
     )
-    _add_workspace_id_argument(run_proposal)
+    _add_optional_workspace_id_argument(run_proposal)
     _add_optional_track_selection_argument(run_proposal)
     _add_required_proposal_id_argument(run_proposal)
     _add_workspace_root_argument(run_proposal)
@@ -230,7 +231,7 @@ def register_proposal_parsers(subparsers) -> None:
         "show-proposals",
         help="Show proposal artifacts for one workspace.",
     )
-    _add_workspace_id_argument(show_proposals)
+    _add_optional_workspace_id_argument(show_proposals)
     _add_workspace_root_argument(show_proposals)
     _add_proposal_query_arguments(show_proposals)
     _add_json_output_arguments(

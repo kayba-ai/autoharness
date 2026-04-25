@@ -82,6 +82,37 @@ def test_evaluate_stage_result_returns_inconclusive_when_interval_straddles_gate
     assert result["passed"] is None
 
 
+def test_evaluate_stage_result_includes_stability_gate_metadata() -> None:
+    result = evaluate_stage_result(
+        payload={
+            "dry_run": False,
+            "validation_summary": {
+                "success_count": 3,
+                "run_count": 3,
+                "success_rate_confidence_interval": {
+                    "lower": 0.7,
+                    "upper": 0.95,
+                    "confidence_level": 0.85,
+                },
+                "stability_summary": {
+                    "flaky": True,
+                    "stability_score": 0.75,
+                    "varying_metric_keys": ["score"],
+                    "varying_metric_count": 1,
+                    "varying_task_ids": [],
+                    "varying_task_count": 0,
+                },
+            },
+        },
+        stage_policy=stage_policy_for("validation", min_judge_pass_rate=0.6),
+    )
+
+    assert result["decision"] == "passed"
+    assert result["stability_gate"]["applies"] is True
+    assert result["stability_gate"]["passed"] is False
+    assert result["stability_gate"]["flaky"] is True
+
+
 def test_compare_against_baseline_detects_clear_improvement() -> None:
     comparison = compare_against_baseline(
         candidate_payload={

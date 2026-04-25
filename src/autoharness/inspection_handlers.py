@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .cli_support import (
     _load_structured_file,
+    _resolve_workspace_id,
     _resolve_workspace_track,
     _resolved_track_campaign_policy_details,
     _resolved_track_policy_details,
@@ -3824,6 +3825,10 @@ def _handle_export_root_champion_report(args: argparse.Namespace) -> int:
 
 
 def _handle_show_workspace_summary(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     rendered = _render_workspace_summary(
         root=args.root,
         workspace_id=args.workspace_id,

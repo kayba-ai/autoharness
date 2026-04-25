@@ -24,6 +24,7 @@ from .campaign_handlers import (
     _handle_show_campaign_report_file,
     _handle_show_campaign_artifacts,
     _handle_show_campaign,
+    _handle_show_campaign_queue,
     _handle_show_campaigns,
     _handle_show_root_campaigns,
     _handle_validate_campaign_report_file,
@@ -34,6 +35,7 @@ from .cli_arguments import (
     _add_json_output_arguments,
     _add_optional_format_argument,
     _add_optional_track_selection_argument,
+    _add_optional_workspace_id_argument,
     _add_required_adapter_argument,
     _add_required_output_argument,
     _add_workspace_id_argument,
@@ -551,9 +553,10 @@ def _add_root_campaign_batch_arguments(parser) -> None:
 def register_campaign_parsers(subparsers) -> None:
     run_campaign = subparsers.add_parser(
         "run-campaign",
+        aliases=["optimize"],
         help="Run a resumable campaign from manual edit plans or generator-driven candidates.",
     )
-    _add_workspace_id_argument(run_campaign)
+    _add_optional_workspace_id_argument(run_campaign)
     _add_optional_track_selection_argument(run_campaign)
     _add_workspace_root_argument(run_campaign)
     _add_required_adapter_argument(run_campaign)
@@ -979,6 +982,30 @@ def register_campaign_parsers(subparsers) -> None:
     )
     show_root_campaigns.set_defaults(handler=_handle_show_root_campaigns)
 
+    show_campaign_queue = subparsers.add_parser(
+        "show-campaign-queue",
+        help="Inspect queued and in-flight background campaigns, leases, retries, and resource usage.",
+    )
+    show_campaign_queue.add_argument(
+        "--workspace-id",
+        action="append",
+        default=[],
+        help="Repeatable workspace id filter. Defaults to all workspaces found under --root.",
+    )
+    _add_workspace_root_argument(show_campaign_queue)
+    show_campaign_queue.add_argument(
+        "--track-id",
+        action="append",
+        default=[],
+        help="Repeatable track id filter. Defaults to all tracks in each selected workspace.",
+    )
+    _add_json_output_arguments(
+        show_campaign_queue,
+        json_help="Print the background campaign queue inspection JSON.",
+        output_help="Optional path to write the background campaign queue inspection JSON.",
+    )
+    show_campaign_queue.set_defaults(handler=_handle_show_campaign_queue)
+
     export_root_campaign_report = subparsers.add_parser(
         "export-root-campaign-report",
         help="Export persisted campaign runs across selected workspaces under one workspace root.",
@@ -1010,7 +1037,7 @@ def register_campaign_parsers(subparsers) -> None:
         "resume-campaign",
         help="Resume a previously paused campaign run.",
     )
-    _add_workspace_id_argument(resume_campaign)
+    _add_optional_workspace_id_argument(resume_campaign)
     _add_optional_track_selection_argument(resume_campaign)
     _add_workspace_root_argument(resume_campaign)
     resume_campaign.add_argument("--campaign-id", required=True)
@@ -1025,7 +1052,7 @@ def register_campaign_parsers(subparsers) -> None:
         "pause-campaign",
         help="Request that a queued or running campaign pause at the next control checkpoint.",
     )
-    _add_workspace_id_argument(pause_campaign)
+    _add_optional_workspace_id_argument(pause_campaign)
     _add_optional_track_selection_argument(pause_campaign)
     _add_workspace_root_argument(pause_campaign)
     pause_campaign.add_argument("--campaign-id", required=True)
@@ -1040,7 +1067,7 @@ def register_campaign_parsers(subparsers) -> None:
         "cancel-campaign",
         help="Request that a queued or running campaign cancel at the next control checkpoint.",
     )
-    _add_workspace_id_argument(cancel_campaign)
+    _add_optional_workspace_id_argument(cancel_campaign)
     _add_optional_track_selection_argument(cancel_campaign)
     _add_workspace_root_argument(cancel_campaign)
     cancel_campaign.add_argument("--campaign-id", required=True)
@@ -1055,7 +1082,7 @@ def register_campaign_parsers(subparsers) -> None:
         "show-campaign",
         help="Show one persisted campaign run.",
     )
-    _add_workspace_id_argument(show_campaign)
+    _add_optional_workspace_id_argument(show_campaign)
     _add_optional_track_selection_argument(show_campaign)
     _add_workspace_root_argument(show_campaign)
     show_campaign.add_argument("--campaign-id", required=True)
@@ -1070,7 +1097,7 @@ def register_campaign_parsers(subparsers) -> None:
         "show-campaigns",
         help="List campaign runs for one workspace.",
     )
-    _add_workspace_id_argument(show_campaigns)
+    _add_optional_workspace_id_argument(show_campaigns)
     _add_optional_track_selection_argument(show_campaigns)
     _add_workspace_root_argument(show_campaigns)
     _add_json_output_arguments(

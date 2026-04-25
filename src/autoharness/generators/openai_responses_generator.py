@@ -14,6 +14,7 @@ from ..editing import EditPlan
 from ..proposal_context import ProposalGenerationContext
 from .base import (
     GeneratedProposal,
+    ProposalGenerationError,
     ProposalGenerationProviderAuthError,
     ProposalGenerationProviderError,
     ProposalGenerationProviderRateLimitError,
@@ -105,6 +106,12 @@ class OpenAIResponsesProposalGenerator:
             env_key="AUTOHARNESS_OPENAI_MAX_OPERATIONS",
             default=_DEFAULT_MAX_OPERATIONS_BY_SCOPE[proposal_scope],
         )
+        max_repair_attempts = _resolve_nonnegative_int_setting(
+            request.metadata,
+            key="max_repair_attempts",
+            env_key="AUTOHARNESS_OPENAI_MAX_REPAIR_ATTEMPTS",
+            default=1,
+        )
         prompt_payload = _build_prompt_payload(
             context=context,
             request=request,
@@ -115,37 +122,96 @@ class OpenAIResponsesProposalGenerator:
             model=model,
             reasoning_effort=reasoning_effort,
             prompt_payload=prompt_payload,
-            proposal_scope=proposal_scope,
-            max_operations=max_operations,
-        )
-        response_payload = _call_openai_responses_api(
-            api_key=api_key,
-            timeout_seconds=timeout_seconds,
-            request_payload=request_payload,
-            base_url=str(
-                request.metadata.get("base_url")
-                or os.environ.get(
-                    "AUTOHARNESS_OPENAI_BASE_URL",
-                    "https://api.openai.com/v1/responses",
-                )
+            instructions=_proposal_instructions(
+                proposal_scope=proposal_scope,
+                max_operations=max_operations,
             ),
         )
-        response_text = _extract_response_text(response_payload)
-        try:
-            proposal_payload, response_repair_steps = decode_json_object_text(response_text)
-            proposal_payload, payload_repair_steps = normalize_generated_payload(
-                payload=proposal_payload,
-                request=request,
+        base_url = str(
+            request.metadata.get("base_url")
+            or os.environ.get(
+                "AUTOHARNESS_OPENAI_BASE_URL",
+                "https://api.openai.com/v1/responses",
             )
-        except (ProposalGenerationProviderError, ProposalGenerationProviderAuthError):
-            raise
-        except ValueError as exc:
+        )
+        response_attempts: list[dict[str, Any]] = []
+        proposal_payload: dict[str, Any] | None = None
+        final_response_payload: dict[str, Any] | None = None
+        final_response_text = ""
+        final_response_repair_steps: list[str] = []
+        parse_error_message: str | None = None
+
+        for attempt_index in range(max_repair_attempts + 1):
+            phase = "initial" if attempt_index == 0 else "repair"
+            if attempt_index == 0:
+                current_prompt_payload = prompt_payload
+                current_request_payload = request_payload
+            else:
+                current_prompt_payload = _build_repair_prompt_payload(
+                    original_prompt_payload=prompt_payload,
+                    request=request,
+                    invalid_response_text=final_response_text,
+                    parse_error=parse_error_message,
+                )
+                current_request_payload = _build_openai_request_payload(
+                    model=model,
+                    reasoning_effort=reasoning_effort,
+                    prompt_payload=current_prompt_payload,
+                    instructions=_repair_instructions(
+                        proposal_scope=proposal_scope,
+                        max_operations=max_operations,
+                    ),
+                )
+            response_payload = _call_openai_responses_api(
+                api_key=api_key,
+                timeout_seconds=timeout_seconds,
+                request_payload=current_request_payload,
+                base_url=base_url,
+            )
+            response_text = _extract_response_text(response_payload)
+            final_response_payload = response_payload
+            final_response_text = response_text
+            attempt_entry: dict[str, Any] = {
+                "attempt_index": attempt_index,
+                "phase": phase,
+                "request_payload": current_request_payload,
+                "response_id": response_payload.get("id"),
+                "response_payload": response_payload,
+                "response_text": response_text,
+            }
+            try:
+                proposal_payload, final_response_repair_steps = _parse_proposal_response(
+                    response_text=response_text,
+                    request=request,
+                )
+            except (ProposalGenerationProviderError, ProposalGenerationProviderAuthError):
+                raise
+            except (ProposalGenerationError, ValueError) as exc:
+                parse_error_message = str(exc)
+                attempt_entry["status"] = "invalid"
+                attempt_entry["parse_error"] = parse_error_message
+                response_attempts.append(attempt_entry)
+                if attempt_index >= max_repair_attempts:
+                    raise ProposalGenerationProviderError(
+                        "OpenAI generator response did not contain a valid edit plan."
+                    ) from exc
+                continue
+            except Exception as exc:
+                parse_error_message = str(exc)
+                attempt_entry["status"] = "invalid"
+                attempt_entry["parse_error"] = parse_error_message
+                response_attempts.append(attempt_entry)
+                if attempt_index >= max_repair_attempts:
+                    raise ProposalGenerationProviderError(str(exc)) from exc
+                continue
+            attempt_entry["status"] = "success"
+            attempt_entry["repair_steps"] = list(final_response_repair_steps)
+            response_attempts.append(attempt_entry)
+            break
+
+        if proposal_payload is None or final_response_payload is None:
             raise ProposalGenerationProviderError(
                 "OpenAI generator response did not contain a valid edit plan."
-            ) from exc
-        except Exception as exc:
-            raise ProposalGenerationProviderError(
-                str(exc),
             )
 
         edit_plan = normalized_edit_plan_from_payload(proposal_payload)
@@ -172,14 +238,17 @@ class OpenAIResponsesProposalGenerator:
                 "provider": "openai",
                 "model": model,
                 "reasoning_effort": reasoning_effort,
-                "response_id": response_payload.get("id"),
+                "response_id": final_response_payload.get("id"),
                 "provider_request_payload": request_payload,
-                "provider_response_payload": response_payload,
-                "provider_response_text": response_text,
+                "provider_response_payload": final_response_payload,
+                "provider_response_text": final_response_text,
+                "provider_attempts": response_attempts,
                 "proposal_scope": proposal_scope,
                 "max_operations": max_operations,
-                "repair_steps": response_repair_steps + payload_repair_steps,
-                "usage": _extract_usage_summary(response_payload),
+                "max_repair_attempts": max_repair_attempts,
+                "repair_attempt_count": max(0, len(response_attempts) - 1),
+                "repair_steps": list(final_response_repair_steps),
+                "usage": _extract_usage_summary(final_response_payload),
             },
         )
 
@@ -219,6 +288,31 @@ def _resolve_positive_int_setting(
     if value < 1:
         raise ValueError(
             f"`openai_responses.{key}` must be a positive integer."
+        )
+    return value
+
+
+def _resolve_nonnegative_int_setting(
+    metadata: dict[str, Any],
+    *,
+    key: str,
+    env_key: str,
+    default: int,
+) -> int:
+    raw_value = metadata.get(key)
+    if raw_value is None:
+        raw_value = os.environ.get(env_key)
+    if raw_value is None or raw_value == "":
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"`openai_responses.{key}` must be a non-negative integer."
+        ) from exc
+    if value < 0:
+        raise ValueError(
+            f"`openai_responses.{key}` must be a non-negative integer."
         )
     return value
 
@@ -327,16 +421,12 @@ def _build_openai_request_payload(
     model: str,
     reasoning_effort: str,
     prompt_payload: dict[str, Any],
-    proposal_scope: str,
-    max_operations: int,
+    instructions: str,
 ) -> dict[str, Any]:
     return {
         "model": model,
         "reasoning": {"effort": reasoning_effort},
-        "instructions": _proposal_instructions(
-            proposal_scope=proposal_scope,
-            max_operations=max_operations,
-        ),
+        "instructions": instructions,
         "input": [
             {
                 "role": "user",
@@ -442,6 +532,60 @@ def _proposal_instructions(*, proposal_scope: str, max_operations: int) -> str:
         + "of the same hypothesis. "
         + f"You may use up to {max_operations} operations."
     )
+
+
+def _repair_instructions(*, proposal_scope: str, max_operations: int) -> str:
+    return (
+        "You are repairing a previously invalid AUTOHARNESS proposal response. "
+        "Return only valid JSON. "
+        "The JSON must contain: hypothesis, summary, intervention_class, operations. "
+        "Use only supported operation types: write_file and search_replace. "
+        "Paths must stay relative to the target root. "
+        "Preserve the original proposal intent where possible, but fix invalid structure, "
+        "missing required fields, and malformed operations. "
+        "If you cannot express the patch as operations, you may return a files mapping "
+        "from relative path to file content and autoharness will repair it. "
+        + _proposal_task(proposal_scope)
+        + f" Do not exceed {max_operations} operations."
+    )
+
+
+def _parse_proposal_response(
+    *,
+    response_text: str,
+    request: ProposalGenerationRequest,
+) -> tuple[dict[str, Any], list[str]]:
+    proposal_payload, response_repair_steps = decode_json_object_text(response_text)
+    proposal_payload, payload_repair_steps = normalize_generated_payload(
+        payload=proposal_payload,
+        request=request,
+    )
+    return proposal_payload, response_repair_steps + payload_repair_steps
+
+
+def _build_repair_prompt_payload(
+    *,
+    original_prompt_payload: dict[str, Any],
+    request: ProposalGenerationRequest,
+    invalid_response_text: str,
+    parse_error: str | None,
+) -> dict[str, Any]:
+    return {
+        "task": "Repair an invalid autoharness proposal response into valid proposal JSON.",
+        "request": request.to_dict(),
+        "original_prompt_payload": original_prompt_payload,
+        "invalid_response_text": invalid_response_text,
+        "parse_error": parse_error,
+        "repair_requirements": {
+            "required_keys": [
+                "hypothesis",
+                "summary",
+                "intervention_class",
+                "operations",
+            ],
+            "supported_operation_types": ["write_file", "search_replace"],
+        },
+    }
 
 
 def _collect_repo_snapshot(

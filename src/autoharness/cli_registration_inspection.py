@@ -8,6 +8,7 @@ from .cli_arguments import (
     _add_force_argument,
     _add_json_output_arguments,
     _add_optional_format_argument,
+    _add_optional_workspace_id_argument,
     _add_optional_track_selection_argument,
     _add_required_output_argument,
     _add_required_iteration_id_argument,
@@ -268,9 +269,10 @@ def register_inspection_parsers(subparsers) -> None:
 
     show_workspace_summary = subparsers.add_parser(
         "show-workspace-summary",
+        aliases=["report"],
         help="Show aggregate summary across tracks, records, promotions, and iterations.",
     )
-    _add_workspace_id_argument(show_workspace_summary)
+    _add_optional_workspace_id_argument(show_workspace_summary)
     _add_workspace_root_argument(show_workspace_summary)
     _add_json_output_arguments(
         show_workspace_summary,

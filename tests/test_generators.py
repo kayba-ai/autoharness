@@ -313,6 +313,9 @@ def test_openai_responses_generator_uses_api_payload(
     assert generated.metadata["provider_request_payload"]["model"] == "gpt-5.1"
     assert generated.metadata["proposal_scope"] == "broad"
     assert generated.metadata["max_operations"] == 7
+    assert generated.metadata["max_repair_attempts"] == 1
+    assert generated.metadata["repair_attempt_count"] == 0
+    assert generated.metadata["provider_attempts"][0]["status"] == "success"
     assert generated.metadata["repair_steps"] == []
 
 
@@ -407,6 +410,114 @@ def test_openai_responses_generator_repairs_fenced_files_payload(
     assert generated.metadata["response_id"] == "resp_repair"
     assert "recovered_json_object_from_response_text" in generated.metadata["repair_steps"]
     assert "repaired_operations_payload" in generated.metadata["repair_steps"]
+
+
+def test_openai_responses_generator_attempts_provider_repair_on_invalid_output(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = tmp_path / ".autoharness" / "settings.yaml"
+    workspaces_root = tmp_path / ".autoharness" / "workspaces"
+    target_root = tmp_path / "candidate"
+    target_root.mkdir()
+    (target_root / "service.py").write_text("print('hello')\n", encoding="utf-8")
+
+    main(["setup", "--output", str(settings)])
+    main(
+        [
+            "init-workspace",
+            "--workspace-id",
+            "demo",
+            "--objective",
+            "Improve harness correctness",
+            "--benchmark",
+            "tau-bench-airline",
+            "--settings",
+            str(settings),
+            "--root",
+            str(workspaces_root),
+        ]
+    )
+
+    workspace = load_workspace(workspaces_root, "demo")
+    state = load_workspace_state(workspaces_root, "demo")
+    context = build_proposal_generation_context(
+        root=workspaces_root,
+        workspace=workspace,
+        state=state,
+        track_id="main",
+        adapter_id="generic_command",
+        stage="validation",
+        benchmark_target="tau-bench-airline",
+        selected_preset="search",
+        selected_preset_source="policy",
+        policy_preset="search",
+        effective_track_policy={
+            "search_benchmark": "tau-bench-airline",
+            "search_preset": "search",
+        },
+        effective_config={"benchmark_name": "proposal-smoke", "command": ["python", "-c", "print('ok')"]},
+        target_root=target_root,
+    )
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    call_payloads: list[dict[str, object]] = []
+
+    def fake_call(**kwargs):
+        request_payload = kwargs["request_payload"]
+        call_payloads.append(request_payload)
+        if len(call_payloads) == 1:
+            return {
+                "id": "resp_invalid",
+                "output_text": "this is not valid json",
+            }
+        repair_prompt = json.loads(request_payload["input"][0]["content"][0]["text"])
+        assert repair_prompt["task"].startswith("Repair an invalid autoharness proposal")
+        assert repair_prompt["invalid_response_text"] == "this is not valid json"
+        return {
+            "id": "resp_repaired",
+            "output_text": json.dumps(
+                {
+                    "hypothesis": "Repair invalid provider output",
+                    "summary": "Repair the service proposal",
+                    "intervention_class": "source",
+                    "operations": [
+                        {
+                            "type": "write_file",
+                            "path": "service.py",
+                            "content": "print('hello repaired')\n",
+                        }
+                    ],
+                }
+            ),
+        }
+
+    monkeypatch.setattr(
+        openai_responses_generator,
+        "_call_openai_responses_api",
+        fake_call,
+    )
+
+    generator = get_generator("openai_responses")
+    generated = generator.generate(
+        context=context,
+        request=ProposalGenerationRequest(
+            format_version="autoharness.proposal_generation_request.v1",
+            candidate_index=3,
+            strategy_id="greedy_failure_focus",
+            source_mode="generator_loop",
+            intervention_class="source",
+            metadata={"max_repair_attempts": "1"},
+        ),
+    )
+
+    assert len(call_payloads) == 2
+    assert generated.edit_plan.operations[0].type == "write_file"
+    assert generated.metadata["response_id"] == "resp_repaired"
+    assert generated.metadata["repair_attempt_count"] == 1
+    assert generated.metadata["provider_attempts"][0]["status"] == "invalid"
+    assert generated.metadata["provider_attempts"][0]["parse_error"]
+    assert generated.metadata["provider_attempts"][1]["status"] == "success"
 
 
 def test_local_template_generator_renders_context_variables(

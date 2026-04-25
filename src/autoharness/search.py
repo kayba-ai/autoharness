@@ -445,9 +445,64 @@ def compute_candidate_branch_score(
     ):
         cost_penalty += min(float(benchmark_duration_seconds), 120.0) / 120.0
 
-    score = stage_score + novelty_bonus + focus_bonus + regression_bonus + outcome_score
+    retry_count_total = candidate_snapshot.get("retry_count_total")
+    retry_penalty = 0.0
+    if isinstance(retry_count_total, int) and retry_count_total > 0:
+        retry_penalty = min(float(retry_count_total), 4.0) * 0.35
+
+    attempt_count = candidate_snapshot.get("attempt_count")
+    attempt_penalty = 0.0
+    if isinstance(attempt_count, int) and attempt_count > 1:
+        attempt_penalty = min(float(attempt_count - 1), 3.0) * 0.15
+
+    stability_score = candidate_snapshot.get("stability_score")
+    stability_bonus = 0.0
+    confidence_interval_width = candidate_snapshot.get("confidence_interval_width")
+    confidence_interval_penalty = 0.0
+    if isinstance(stability_score, (int, float)) and not isinstance(stability_score, bool):
+        bounded_stability_score = max(0.0, min(1.0, float(stability_score)))
+        stability_bonus = bounded_stability_score * 0.5
+        if strategy_id == "stability_weighted":
+            stability_bonus *= 1.5
+        stability_penalty += (1.0 - bounded_stability_score) * (
+            1.5 if strategy_id == "stability_weighted" else 0.5
+        )
+    if isinstance(confidence_interval_width, (int, float)) and not isinstance(
+        confidence_interval_width,
+        bool,
+    ):
+        confidence_interval_penalty = min(float(confidence_interval_width), 1.0) * (
+            1.0 if strategy_id == "stability_weighted" else 0.5
+        )
+
+    comparison_decision = str(candidate_snapshot.get("comparison_decision") or "")
+    comparison_bonus = 0.0
+    if comparison_decision == "improved":
+        comparison_bonus = 0.75
+    elif comparison_decision == "regressed":
+        comparison_bonus = -1.0
+    elif comparison_decision == "inconclusive":
+        comparison_bonus = -0.25
+
+    failure_history_penalty = 0.0
+    if status == "pending" and failure_class:
+        failure_history_penalty = min(float(severity), 7.0) * 0.1
+
+    score = (
+        stage_score
+        + novelty_bonus
+        + focus_bonus
+        + regression_bonus
+        + outcome_score
+        + stability_bonus
+        + comparison_bonus
+    )
     score -= stability_penalty
     score -= cost_penalty
+    score -= retry_penalty
+    score -= attempt_penalty
+    score -= confidence_interval_penalty
+    score -= failure_history_penalty
     rationale = {
         "stage": stage,
         "stage_score": stage_score,
@@ -455,12 +510,34 @@ def compute_candidate_branch_score(
         "focus_bonus": focus_bonus,
         "regression_bonus": regression_bonus,
         "outcome_score": outcome_score,
+        "stability_bonus": stability_bonus,
+        "comparison_bonus": comparison_bonus,
         "stability_penalty": stability_penalty,
         "cost_penalty": cost_penalty,
+        "retry_penalty": retry_penalty,
+        "attempt_penalty": attempt_penalty,
+        "confidence_interval_penalty": confidence_interval_penalty,
+        "failure_history_penalty": failure_history_penalty,
         "failure_class": failure_class or None,
         "status": status,
         "promoted": bool(candidate_snapshot.get("promoted")),
         "flaky": bool(candidate_snapshot.get("flaky")),
+        "stability_score": (
+            float(stability_score)
+            if isinstance(stability_score, (int, float)) and not isinstance(stability_score, bool)
+            else None
+        ),
+        "confidence_interval_width": (
+            float(confidence_interval_width)
+            if isinstance(confidence_interval_width, (int, float))
+            and not isinstance(confidence_interval_width, bool)
+            else None
+        ),
+        "comparison_decision": comparison_decision or None,
+        "retry_count_total": (
+            int(retry_count_total) if isinstance(retry_count_total, int) else 0
+        ),
+        "attempt_count": int(attempt_count) if isinstance(attempt_count, int) else 0,
     }
     return score, rationale
 

@@ -17,6 +17,40 @@ from .tracking import (
 from .workspace import WorkspaceConfig, WorkspaceState
 
 
+def _discover_workspace_ids(root: Path) -> list[str]:
+    if not root.exists():
+        return []
+    workspace_ids: list[str] = []
+    for path in sorted(root.iterdir()):
+        if not path.is_dir():
+            continue
+        if (path / "workspace.json").exists():
+            workspace_ids.append(path.name)
+    return workspace_ids
+
+
+def _resolve_workspace_id(
+    *,
+    root: Path,
+    requested_workspace_id: str | None,
+) -> str:
+    if isinstance(requested_workspace_id, str) and requested_workspace_id.strip():
+        return requested_workspace_id
+
+    workspace_ids = _discover_workspace_ids(root)
+    if len(workspace_ids) == 1:
+        return workspace_ids[0]
+    if not workspace_ids:
+        raise SystemExit(
+            "`--workspace-id` is required because no workspaces were found under "
+            f"`{root}`."
+        )
+    raise SystemExit(
+        "`--workspace-id` is required because multiple workspaces were found under "
+        f"`{root}`: {', '.join(workspace_ids)}."
+    )
+
+
 def _resolve_workspace_track(
     *,
     root: Path,

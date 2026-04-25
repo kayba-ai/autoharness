@@ -108,6 +108,7 @@ _GENERATOR_CATALOG = {
             "base_url",
             "proposal_scope",
             "max_operations",
+            "max_repair_attempts",
             "fallback_generators",
         ],
         "environment_variables": [
@@ -119,10 +120,12 @@ _GENERATOR_CATALOG = {
             "AUTOHARNESS_OPENAI_BASE_URL",
             "AUTOHARNESS_OPENAI_PROPOSAL_SCOPE",
             "AUTOHARNESS_OPENAI_MAX_OPERATIONS",
+            "AUTOHARNESS_OPENAI_MAX_REPAIR_ATTEMPTS",
         ],
         "notes": (
             "Requires an OpenAI API key via environment variable. Defaults to a balanced "
-            "multi-file proposal profile; tune with proposal_scope and max_operations."
+            "multi-file proposal profile; tune with proposal_scope, max_operations, "
+            "and max_repair_attempts."
         ),
     },
 }

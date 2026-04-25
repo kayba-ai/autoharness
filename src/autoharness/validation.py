@@ -9,6 +9,20 @@ from .adapters.base import BenchmarkAdapter, JsonDict
 from .stats import mean_confidence_interval, wilson_interval
 
 
+_FAILURE_CLASS_PRIORITY = {
+    "benchmark_signal_error": 70,
+    "benchmark_process_error": 65,
+    "benchmark_adapter_validation_error": 60,
+    "benchmark_artifact_parse_error": 55,
+    "benchmark_metrics_parse_error": 52,
+    "benchmark_task_results_parse_error": 51,
+    "benchmark_timeout": 50,
+    "preflight_failed": 45,
+    "benchmark_command_failed": 40,
+    "benchmark_failed": 30,
+}
+
+
 def run_validation(
     *,
     adapter: BenchmarkAdapter,
@@ -44,6 +58,9 @@ def run_validation(
     if repeat_count == 1:
         payload = dict(runs[0])
         payload["validation_run_count"] = 1
+        failure_class = classify_validation_run(payload)
+        if failure_class is not None:
+            payload["failure_class"] = failure_class
         task_result_summary = _aggregate_task_results(
             runs,
             confidence_level=confidence_level,
@@ -93,6 +110,9 @@ def run_validation(
     task_result_summary = summary.get("task_result_summary")
     if isinstance(task_result_summary, dict):
         payload["task_result_summary"] = task_result_summary
+    primary_failure_class = summary.get("primary_failure_class")
+    if isinstance(primary_failure_class, str) and primary_failure_class:
+        payload["failure_class"] = primary_failure_class
     return payload
 
 
@@ -186,6 +206,13 @@ def aggregate_validation_runs(
             },
         }
     )
+    failure_class_counts = aggregate_validation_failure_classes(runs)
+    if failure_class_counts:
+        summary["failure_class_counts"] = failure_class_counts
+        summary["failure_classes"] = sorted(failure_class_counts)
+        summary["primary_failure_class"] = select_primary_failure_class(
+            failure_class_counts
+        )
     if durations:
         summary["mean_duration_seconds"] = sum(durations) / len(durations)
         summary["max_duration_seconds"] = max(durations)
@@ -201,6 +228,13 @@ def aggregate_validation_runs(
         "mixed_success": 0 < success_count < len(runs),
         "varying_metric_keys": varying_metric_keys,
         "varying_metric_count": len(varying_metric_keys),
+        "failure_classes": (
+            sorted(failure_class_counts)
+            if failure_class_counts
+            else []
+        ),
+        "failure_class_count": len(failure_class_counts),
+        "mixed_failure_classes": len(failure_class_counts) > 1,
         "varying_task_ids": (
             list(task_result_summary.get("varying_task_ids", []))
             if isinstance(task_result_summary, dict)
@@ -272,6 +306,116 @@ def stability_score_from_validation_summary(
     )
     score = success_consistency - (0.25 * metric_penalty) - (0.25 * task_penalty)
     return max(0.0, min(1.0, score))
+
+
+def classify_validation_run(run_payload: JsonDict | dict[str, object] | None) -> str | None:
+    if not isinstance(run_payload, dict):
+        return None
+    if run_payload.get("dry_run") is True:
+        return None
+    if run_payload.get("preflight_failed") is True:
+        return "preflight_failed"
+    if run_payload.get("adapter_validation_error") is True:
+        return "benchmark_adapter_validation_error"
+    if run_payload.get("timed_out") is True:
+        return "benchmark_timeout"
+    process_error = run_payload.get("process_error")
+    if isinstance(process_error, str) and process_error:
+        return "benchmark_process_error"
+    signal_number = run_payload.get("signal_number")
+    exit_code = run_payload.get("exit_code")
+    if (
+        isinstance(signal_number, int)
+        and signal_number > 0
+    ) or (isinstance(exit_code, int) and exit_code < 0):
+        return "benchmark_signal_error"
+
+    metadata = run_payload.get("metadata")
+    metadata_payload = metadata if isinstance(metadata, dict) else {}
+    metrics_parse_failed = isinstance(metadata_payload.get("metrics_parse_error"), str)
+    task_results_parse_failed = isinstance(
+        metadata_payload.get("task_results_parse_error"),
+        str,
+    )
+    if metrics_parse_failed and task_results_parse_failed:
+        return "benchmark_artifact_parse_error"
+    if metrics_parse_failed:
+        return "benchmark_metrics_parse_error"
+    if task_results_parse_failed:
+        return "benchmark_task_results_parse_error"
+
+    success = run_payload.get("success")
+    if success is False:
+        return "benchmark_command_failed"
+    return None
+
+
+def aggregate_validation_failure_classes(
+    runs: list[JsonDict],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for run in runs:
+        failure_class = classify_validation_run(run)
+        if failure_class is None:
+            continue
+        counts[failure_class] = counts.get(failure_class, 0) + 1
+    return counts
+
+
+def select_primary_failure_class(
+    failure_class_counts: dict[str, int] | None,
+) -> str | None:
+    if not isinstance(failure_class_counts, dict) or not failure_class_counts:
+        return None
+    ranked = sorted(
+        (
+            (str(failure_class), int(count))
+            for failure_class, count in failure_class_counts.items()
+            if isinstance(failure_class, str)
+        ),
+        key=lambda item: (
+            -item[1],
+            -_FAILURE_CLASS_PRIORITY.get(item[0], 0),
+            item[0],
+        ),
+    )
+    return ranked[0][0] if ranked else None
+
+
+def classify_validation_payload(payload: dict[str, object] | None) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("dry_run") is True:
+        return None
+
+    validation_summary = payload.get("validation_summary")
+    if isinstance(validation_summary, dict):
+        primary_failure_class = validation_summary.get("primary_failure_class")
+        if isinstance(primary_failure_class, str) and primary_failure_class:
+            return primary_failure_class
+        failure_class_counts = validation_summary.get("failure_class_counts")
+        if isinstance(failure_class_counts, dict):
+            selected = select_primary_failure_class(
+                {
+                    str(key): int(value)
+                    for key, value in failure_class_counts.items()
+                    if isinstance(value, int)
+                }
+            )
+            if selected is not None:
+                return selected
+
+    validation_runs = payload.get("validation_runs")
+    if isinstance(validation_runs, list):
+        selected = select_primary_failure_class(
+            aggregate_validation_failure_classes(
+                [run for run in validation_runs if isinstance(run, dict)]
+            )
+        )
+        if selected is not None:
+            return selected
+
+    return classify_validation_run(payload)
 
 
 def _aggregate_numeric_metrics(

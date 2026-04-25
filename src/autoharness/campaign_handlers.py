@@ -18,6 +18,7 @@ from .campaign_runs import (
     CampaignDecisionLogEntry,
     CampaignRun,
     _utc_now,
+    campaign_lease_is_stale,
     campaign_run_path,
     claim_campaign_run,
     claim_workspace_campaign_lease,
@@ -31,9 +32,10 @@ from .campaign_runs import (
     release_workspace_campaign_lease,
     resolve_workspace_campaign_run,
     set_campaign_desired_state,
+    workspace_campaign_lease_path,
 )
-from .cli_support import _resolve_workspace_track
 from .cli_support import _load_structured_file
+from .cli_support import _resolve_workspace_id, _resolve_workspace_track
 from .generators import (
     ProposalGenerationProcessError,
     ProposalGenerationProviderAuthError,
@@ -90,6 +92,7 @@ from .tracking import (
     load_workspace,
     load_workspace_state,
 )
+from .validation import classify_validation_payload, stability_score_from_validation_summary
 
 
 def _parse_utc_timestamp(value: str) -> datetime:
@@ -192,21 +195,9 @@ def _classify_record_failure(record) -> str | None:
     payload = record.payload
     if not isinstance(payload, dict):
         return "benchmark_failed"
-    if _payload_contains_timed_out_run(payload):
-        return "benchmark_timeout"
-    if _payload_contains_process_error(payload):
-        return "benchmark_process_error"
-    if _payload_contains_signal_error(payload):
-        return "benchmark_signal_error"
-    parse_failure_class = _payload_parse_failure_class(payload)
-    if parse_failure_class is not None:
-        return parse_failure_class
-    preflight_validation = payload.get("preflight_validation")
-    if isinstance(preflight_validation, dict):
-        if preflight_validation.get("all_passed") is False:
-            return "preflight_failed"
-    if payload.get("adapter_validation_error") is True:
-        return "benchmark_adapter_validation_error"
+    validation_failure_class = classify_validation_payload(payload)
+    if validation_failure_class is not None:
+        return validation_failure_class
     stage_evaluation = payload.get("stage_evaluation")
     if isinstance(stage_evaluation, dict):
         baseline_comparison = stage_evaluation.get("baseline_comparison")
@@ -260,6 +251,66 @@ def _record_is_flaky(record) -> bool:
     if not isinstance(stability_summary, dict):
         return False
     return bool(stability_summary.get("flaky"))
+
+
+def _record_stability_score(record) -> float | None:
+    payload = record.payload
+    if not isinstance(payload, dict):
+        return None
+    stage_evaluation = payload.get("stage_evaluation")
+    if isinstance(stage_evaluation, dict):
+        stability_gate = stage_evaluation.get("stability_gate")
+        if isinstance(stability_gate, dict):
+            stability_score = stability_gate.get("stability_score")
+            if (
+                isinstance(stability_score, (int, float))
+                and not isinstance(stability_score, bool)
+            ):
+                return float(stability_score)
+    validation_summary = payload.get("validation_summary")
+    if not isinstance(validation_summary, dict):
+        return None
+    return stability_score_from_validation_summary(validation_summary)
+
+
+def _record_confidence_interval_width(record) -> float | None:
+    payload = record.payload
+    if not isinstance(payload, dict):
+        return None
+    stage_evaluation = payload.get("stage_evaluation")
+    if isinstance(stage_evaluation, dict):
+        stability_gate = stage_evaluation.get("stability_gate")
+        if isinstance(stability_gate, dict):
+            width = stability_gate.get("confidence_interval_width")
+            if isinstance(width, (int, float)) and not isinstance(width, bool):
+                return float(width)
+    validation_summary = payload.get("validation_summary")
+    if not isinstance(validation_summary, dict):
+        return None
+    interval = validation_summary.get("success_rate_confidence_interval")
+    if not isinstance(interval, dict):
+        return None
+    lower = interval.get("lower")
+    upper = interval.get("upper")
+    if (
+        isinstance(lower, (int, float))
+        and not isinstance(lower, bool)
+        and isinstance(upper, (int, float))
+        and not isinstance(upper, bool)
+    ):
+        return float(upper) - float(lower)
+    return None
+
+
+def _record_stability_gate(record) -> dict[str, object] | None:
+    payload = record.payload
+    if not isinstance(payload, dict):
+        return None
+    stage_evaluation = payload.get("stage_evaluation")
+    if not isinstance(stage_evaluation, dict):
+        return None
+    stability_gate = stage_evaluation.get("stability_gate")
+    return dict(stability_gate) if isinstance(stability_gate, dict) else None
 
 
 def _empty_resource_usage() -> dict[str, float | int]:
@@ -1306,19 +1357,25 @@ def _execute_campaign(
         generation_request = dict(candidate.generation_request)
         if "stage" not in generation_request and active_stage:
             generation_request["stage"] = active_stage
+        retry_count_total = sum(int(value) for value in candidate.retry_counts.values())
         snapshot: dict[str, object] = {
             "index": candidate.index,
+            "attempt_count": candidate.attempt_count,
+            "retry_count_total": retry_count_total,
             "status": candidate.status,
             "failure_class": candidate.failure_class,
             "intervention_class": candidate.intervention_class,
             "generation_request": generation_request,
             "promoted": candidate.promoted,
+            "comparison_decision": candidate.comparison_decision,
         }
         if isinstance(candidate.branch_score_rationale, dict):
             for key in (
                 "flaky",
                 "benchmark_cost",
                 "benchmark_duration_seconds",
+                "stability_score",
+                "confidence_interval_width",
             ):
                 if key in candidate.branch_score_rationale:
                     snapshot[key] = candidate.branch_score_rationale[key]
@@ -1441,6 +1498,17 @@ def _execute_campaign(
         stage_evaluation = record.payload.get("stage_evaluation")
         if not isinstance(stage_evaluation, dict) or stage_evaluation.get("passed") is not True:
             return False, "stage_gate_failed", None
+        stability_gate = _record_stability_gate(record)
+        if isinstance(stability_gate, dict) and stability_gate.get("applies") is True:
+            if stability_gate.get("passed") is not True:
+                if bool(stability_gate.get("flaky")) and campaign.allow_flaky_promotion:
+                    pass
+                else:
+                    return False, (
+                        "provisional_winner"
+                        if bool(stability_gate.get("flaky"))
+                        else "stability_gate_failed"
+                    ), None
 
         promotion_target_root = Path(campaign.promotion_target_root or campaign.target_root)
         try:
@@ -1886,8 +1954,17 @@ def _execute_campaign(
                         retryable_record_failure_class = "benchmark_command_failed"
                     elif record_failure_class == "preflight_failed":
                         retryable_record_failure_class = "preflight_failed"
-                    elif candidate_status == "success" and _record_is_flaky(record):
-                        retryable_record_failure_class = "unstable_validation"
+                    else:
+                        stability_gate = _record_stability_gate(record)
+                        if candidate_status == "success" and (
+                            _record_is_flaky(record)
+                            or (
+                                isinstance(stability_gate, dict)
+                                and stability_gate.get("applies") is True
+                                and stability_gate.get("passed") is not True
+                            )
+                        ):
+                            retryable_record_failure_class = "unstable_validation"
                     if retryable_record_failure_class is not None:
                         retry_scheduled = _schedule_retry(
                             index=index,
@@ -1938,6 +2015,21 @@ def _execute_campaign(
                 completed_snapshot["benchmark_duration_seconds"] = record_resource_usage[
                     "benchmark_total_duration_seconds"
                 ]
+                stability_score = _record_stability_score(record)
+                if stability_score is not None:
+                    completed_snapshot["stability_score"] = stability_score
+                confidence_interval_width = _record_confidence_interval_width(record)
+                if confidence_interval_width is not None:
+                    completed_snapshot["confidence_interval_width"] = (
+                        confidence_interval_width
+                    )
+                baseline_comparison = record.payload.get("stage_evaluation", {}).get(
+                    "baseline_comparison"
+                ) if isinstance(record.payload.get("stage_evaluation"), dict) else None
+                if isinstance(baseline_comparison, dict):
+                    baseline_decision = baseline_comparison.get("decision")
+                    if isinstance(baseline_decision, str) and baseline_decision:
+                        completed_snapshot["comparison_decision"] = baseline_decision
             branch_score, branch_score_rationale = compute_candidate_branch_score(
                 strategy_id=campaign.strategy,
                 candidate_snapshot=completed_snapshot,
@@ -2095,6 +2187,10 @@ def _execute_campaign(
             break
 
 def _handle_run_campaign(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     workspace, _, track_id = _resolve_workspace_track(
         root=args.root,
         workspace_id=args.workspace_id,
@@ -3414,6 +3510,409 @@ def _format_count_map(mapping: dict[str, int]) -> str:
     return ", ".join(f"{key}={mapping[key]}" for key in sorted(mapping)) or "(none)"
 
 
+def _merge_count_maps(
+    counts: dict[str, int],
+    additions: dict[str, int],
+) -> dict[str, int]:
+    merged = dict(counts)
+    for key, value in additions.items():
+        merged[key] = merged.get(key, 0) + int(value)
+    return merged
+
+
+def _campaign_retry_counts(campaign: CampaignRun) -> dict[str, int]:
+    retry_counts: dict[str, int] = {}
+    for candidate in campaign.candidates:
+        retry_counts = _merge_count_maps(
+            retry_counts,
+            {
+                str(key): int(value)
+                for key, value in candidate.retry_counts.items()
+            },
+        )
+    return retry_counts
+
+
+def _campaign_failure_class_counts(campaign: CampaignRun) -> dict[str, int]:
+    failure_class_counts: dict[str, int] = {}
+    for candidate in campaign.candidates:
+        if not isinstance(candidate.failure_class, str):
+            continue
+        failure_class_counts[candidate.failure_class] = (
+            failure_class_counts.get(candidate.failure_class, 0) + 1
+        )
+    return failure_class_counts
+
+
+def _load_workspace_campaign_lease_entry(
+    *,
+    root: Path,
+    workspace_id: str,
+) -> dict[str, object] | None:
+    path = workspace_campaign_lease_path(root=root, workspace_id=workspace_id)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "workspace_id": workspace_id,
+            "lease_path": str(path),
+            "lease_owner": None,
+            "lease_claimed_at": None,
+            "lease_heartbeat_at": None,
+            "lease_expires_at": None,
+            "is_stale": None,
+            "load_error": str(exc),
+        }
+    if not isinstance(payload, dict):
+        return {
+            "workspace_id": workspace_id,
+            "lease_path": str(path),
+            "lease_owner": None,
+            "lease_claimed_at": None,
+            "lease_heartbeat_at": None,
+            "lease_expires_at": None,
+            "is_stale": None,
+            "load_error": f"Expected mapping in JSON file: {path}",
+        }
+
+    lease_expires_at = payload.get("lease_expires_at")
+    try:
+        is_stale = (
+            _parse_utc_timestamp(lease_expires_at) <= datetime.now(UTC)
+            if isinstance(lease_expires_at, str)
+            else False
+        )
+    except ValueError as exc:
+        return {
+            "workspace_id": workspace_id,
+            "lease_path": str(path),
+            "lease_owner": None,
+            "lease_claimed_at": None,
+            "lease_heartbeat_at": None,
+            "lease_expires_at": (
+                str(lease_expires_at) if lease_expires_at is not None else None
+            ),
+            "is_stale": None,
+            "load_error": str(exc),
+        }
+    return {
+        "workspace_id": workspace_id,
+        "lease_path": str(path),
+        "lease_owner": (
+            str(payload["lease_owner"]) if payload.get("lease_owner") is not None else None
+        ),
+        "lease_claimed_at": (
+            str(payload["lease_claimed_at"])
+            if payload.get("lease_claimed_at") is not None
+            else None
+        ),
+        "lease_heartbeat_at": (
+            str(payload["lease_heartbeat_at"])
+            if payload.get("lease_heartbeat_at") is not None
+            else None
+        ),
+        "lease_expires_at": (
+            str(payload["lease_expires_at"])
+            if payload.get("lease_expires_at") is not None
+            else None
+        ),
+        "is_stale": is_stale,
+        "load_error": None,
+    }
+
+
+def _summarize_queue_workers(
+    *,
+    workspace_leases: list[dict[str, object]],
+    campaign_items: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    workers: dict[str, dict[str, object]] = {}
+
+    def _worker_entry(worker_id: str) -> dict[str, object]:
+        return workers.setdefault(
+            worker_id,
+            {
+                "worker_id": worker_id,
+                "active_campaign_lease_total": 0,
+                "stale_campaign_lease_total": 0,
+                "active_workspace_lease_total": 0,
+                "stale_workspace_lease_total": 0,
+                "workspace_ids": set(),
+                "campaign_ids": set(),
+            },
+        )
+
+    for lease in workspace_leases:
+        worker_id = lease.get("lease_owner")
+        workspace_id = lease.get("workspace_id")
+        if not isinstance(worker_id, str) or not worker_id:
+            continue
+        entry = _worker_entry(worker_id)
+        if isinstance(workspace_id, str):
+            entry["workspace_ids"].add(workspace_id)
+        if lease.get("is_stale") is True:
+            entry["stale_workspace_lease_total"] = (
+                int(entry["stale_workspace_lease_total"]) + 1
+            )
+        else:
+            entry["active_workspace_lease_total"] = (
+                int(entry["active_workspace_lease_total"]) + 1
+            )
+
+    for item in campaign_items:
+        lease = item.get("lease")
+        if not isinstance(lease, dict):
+            continue
+        worker_id = lease.get("lease_owner")
+        if not isinstance(worker_id, str) or not worker_id:
+            continue
+        entry = _worker_entry(worker_id)
+        workspace_id = item.get("workspace_id")
+        if isinstance(workspace_id, str):
+            entry["workspace_ids"].add(workspace_id)
+        campaign_id = item.get("campaign_id")
+        track_id = item.get("track_id")
+        if (
+            isinstance(workspace_id, str)
+            and isinstance(track_id, str)
+            and isinstance(campaign_id, str)
+        ):
+            entry["campaign_ids"].add(f"{workspace_id}/{track_id}/{campaign_id}")
+        if lease.get("is_stale") is True:
+            entry["stale_campaign_lease_total"] = (
+                int(entry["stale_campaign_lease_total"]) + 1
+            )
+        else:
+            entry["active_campaign_lease_total"] = (
+                int(entry["active_campaign_lease_total"]) + 1
+            )
+
+    rendered: list[dict[str, object]] = []
+    for worker_id in sorted(workers):
+        entry = workers[worker_id]
+        rendered.append(
+            {
+                "worker_id": worker_id,
+                "active_campaign_lease_total": int(
+                    entry["active_campaign_lease_total"]
+                ),
+                "stale_campaign_lease_total": int(entry["stale_campaign_lease_total"]),
+                "active_workspace_lease_total": int(
+                    entry["active_workspace_lease_total"]
+                ),
+                "stale_workspace_lease_total": int(
+                    entry["stale_workspace_lease_total"]
+                ),
+                "workspace_ids": sorted(
+                    str(item) for item in set(entry["workspace_ids"])
+                ),
+                "campaign_ids": sorted(str(item) for item in set(entry["campaign_ids"])),
+            }
+        )
+    return rendered
+
+
+def _render_campaign_queue(
+    *,
+    root: Path,
+    requested_workspace_ids: list[str],
+    requested_track_ids: list[str],
+) -> dict[str, object]:
+    workspace_filter = set(requested_workspace_ids)
+    track_filter = set(requested_track_ids)
+    selected_workspace_ids = [
+        workspace_id
+        for workspace_id in _discover_workspace_ids(root)
+        if not workspace_filter or workspace_id in workspace_filter
+    ]
+    runnable_campaign_ids = {
+        campaign.campaign_run_id
+        for campaign in list_runnable_campaign_runs(
+            root=root,
+            workspace_ids=list(requested_workspace_ids),
+            track_ids=list(requested_track_ids),
+        )
+    }
+
+    status_priority = {
+        "queued": 0,
+        "paused": 1,
+        "running": 2,
+    }
+    workspace_leases = [
+        lease
+        for lease in (
+            _load_workspace_campaign_lease_entry(root=root, workspace_id=workspace_id)
+            for workspace_id in selected_workspace_ids
+        )
+        if lease is not None
+    ]
+
+    active_campaigns: list[CampaignRun] = []
+    for workspace_id in selected_workspace_ids:
+        workspace = load_workspace(root, workspace_id)
+        for track_id in sorted(workspace.tracks):
+            if track_filter and track_id not in track_filter:
+                continue
+            for campaign in list_track_campaign_runs(
+                root=root,
+                workspace_id=workspace_id,
+                track_id=track_id,
+            ):
+                if campaign.execution_mode != "background":
+                    continue
+                if campaign.status not in {"queued", "running", "paused"}:
+                    continue
+                active_campaigns.append(campaign)
+
+    active_campaigns.sort(
+        key=lambda campaign: (
+            status_priority.get(campaign.status, 99),
+            campaign.created_at,
+            campaign.workspace_id,
+            campaign.track_id,
+            campaign.campaign_run_id,
+        )
+    )
+
+    items: list[dict[str, object]] = []
+    retry_counts: dict[str, int] = {}
+    failure_class_counts: dict[str, int] = {}
+    campaign_status_counts: dict[str, int] = {}
+    desired_state_counts: dict[str, int] = {}
+    lease_state_counts: dict[str, int] = {}
+    unique_tracks: set[tuple[str, str]] = set()
+    event_total = 0
+    for campaign in active_campaigns:
+        unique_tracks.add((campaign.workspace_id, campaign.track_id))
+        campaign_retry_counts = _campaign_retry_counts(campaign)
+        campaign_failure_class_counts = _campaign_failure_class_counts(campaign)
+        retry_counts = _merge_count_maps(retry_counts, campaign_retry_counts)
+        failure_class_counts = _merge_count_maps(
+            failure_class_counts,
+            campaign_failure_class_counts,
+        )
+        campaign_status_counts[campaign.status] = (
+            campaign_status_counts.get(campaign.status, 0) + 1
+        )
+        desired_state_counts[campaign.desired_state] = (
+            desired_state_counts.get(campaign.desired_state, 0) + 1
+        )
+        campaign_lease = {
+            "lease_owner": campaign.lease_owner,
+            "lease_claimed_at": campaign.lease_claimed_at,
+            "lease_heartbeat_at": campaign.lease_heartbeat_at,
+            "lease_expires_at": campaign.lease_expires_at,
+            "is_stale": (
+                campaign_lease_is_stale(campaign)
+                if campaign.lease_owner is not None
+                else False
+            ),
+        }
+        lease_state_key = "campaign_unleased"
+        if campaign.lease_owner is not None:
+            lease_state_key = (
+                "campaign_stale" if campaign_lease["is_stale"] else "campaign_active"
+            )
+        lease_state_counts[lease_state_key] = lease_state_counts.get(lease_state_key, 0) + 1
+
+        campaign_events = load_workspace_events(
+            root=root,
+            workspace_id=campaign.workspace_id,
+            campaign_run_id=campaign.campaign_run_id,
+            track_id=campaign.track_id,
+        )
+        event_total += len(campaign_events)
+        items.append(
+            {
+                "workspace_id": campaign.workspace_id,
+                "track_id": campaign.track_id,
+                "campaign_id": campaign.campaign_run_id,
+                "campaign_path": str(
+                    campaign_run_path(
+                        root=root,
+                        workspace_id=campaign.workspace_id,
+                        track_id=campaign.track_id,
+                        campaign_run_id=campaign.campaign_run_id,
+                    )
+                ),
+                "status": campaign.status,
+                "desired_state": campaign.desired_state,
+                "stop_reason": campaign.stop_reason,
+                "runnable": campaign.campaign_run_id in runnable_campaign_ids,
+                "stage": campaign.stage,
+                "stage_progression_mode": campaign.stage_progression_mode,
+                "adapter_id": campaign.adapter_id,
+                "generator_id": campaign.generator_id,
+                "strategy": campaign.strategy,
+                "beam_width": campaign.beam_width,
+                "beam_group_limit": campaign.beam_group_limit,
+                "repeat_count": campaign.repeat_count,
+                "candidate_source_mode": campaign.candidate_source_mode,
+                "next_candidate_index": campaign.next_candidate_index,
+                "candidate_total": len(campaign.candidates),
+                "pruned_candidate_total": sum(
+                    1 for candidate in campaign.candidates if candidate.status == "pruned"
+                ),
+                "attempt_total": sum(
+                    int(candidate.attempt_count) for candidate in campaign.candidates
+                ),
+                "success_count": campaign.success_count,
+                "failure_count": campaign.failure_count,
+                "inconclusive_count": campaign.inconclusive_count,
+                "promoted_count": campaign.promoted_count,
+                "event_total": len(campaign_events),
+                "retry_counts": campaign_retry_counts,
+                "retry_total": sum(campaign_retry_counts.values()),
+                "failure_class_counts": campaign_failure_class_counts,
+                "resource_usage": _campaign_resource_usage(root=root, campaign=campaign),
+                "lease": campaign_lease,
+            }
+        )
+
+    for workspace_lease in workspace_leases:
+        lease_state_key = "workspace_invalid"
+        if workspace_lease.get("load_error") is None:
+            lease_state_key = (
+                "workspace_stale"
+                if workspace_lease.get("is_stale") is True
+                else "workspace_active"
+            )
+        lease_state_counts[lease_state_key] = lease_state_counts.get(lease_state_key, 0) + 1
+
+    workers = _summarize_queue_workers(
+        workspace_leases=workspace_leases,
+        campaign_items=items,
+    )
+    return {
+        "workspace_filter": list(requested_workspace_ids),
+        "track_filter": list(requested_track_ids),
+        "workspace_total": len(selected_workspace_ids),
+        "track_total": len(unique_tracks),
+        "campaign_total": len(items),
+        "runnable_campaign_total": len(runnable_campaign_ids),
+        "worker_total": len(workers),
+        "active_worker_total": sum(
+            1
+            for worker in workers
+            if int(worker["active_campaign_lease_total"]) > 0
+            or int(worker["active_workspace_lease_total"]) > 0
+        ),
+        "campaign_status_counts": campaign_status_counts,
+        "desired_state_counts": desired_state_counts,
+        "lease_state_counts": lease_state_counts,
+        "retry_counts": retry_counts,
+        "failure_class_counts": failure_class_counts,
+        "event_total": event_total,
+        "resource_usage": _summarize_campaign_resource_usage(items),
+        "workspace_leases": workspace_leases,
+        "workers": workers,
+        "campaigns": items,
+    }
+
+
 def _collect_root_campaign_items(
     *,
     root: Path,
@@ -4729,6 +5228,65 @@ def _handle_show_root_campaigns(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_show_campaign_queue(args: argparse.Namespace) -> int:
+    rendered = _render_campaign_queue(
+        root=args.root,
+        requested_workspace_ids=list(getattr(args, "workspace_id", [])),
+        requested_track_ids=list(getattr(args, "track_id", [])),
+    )
+    if _emit_json_output(rendered=rendered, output=args.output, as_json=args.json):
+        return 0
+    print(f"Workspaces: {rendered['workspace_total']}")
+    print(f"Tracks: {rendered['track_total']}")
+    print(f"Campaigns: {rendered['campaign_total']}")
+    print(f"Runnable campaigns: {rendered['runnable_campaign_total']}")
+    print(f"Workers: {rendered['worker_total']}")
+    print(f"Active workers: {rendered['active_worker_total']}")
+    print("Campaign statuses: " + _format_count_map(rendered["campaign_status_counts"]))
+    print("Desired states: " + _format_count_map(rendered["desired_state_counts"]))
+    print("Lease states: " + _format_count_map(rendered["lease_state_counts"]))
+    print("Retry counts: " + _format_count_map(rendered["retry_counts"]))
+    print(
+        "Failure classes: "
+        + _format_count_map(rendered["failure_class_counts"])
+    )
+    print(f"Events: {rendered['event_total']}")
+    _print_resource_usage_summary(rendered["resource_usage"])
+    if rendered["workspace_leases"]:
+        print("Workspace leases:")
+        for lease in rendered["workspace_leases"]:
+            print(
+                f"- {lease['workspace_id']}: "
+                f"worker={lease.get('lease_owner') or '(none)'} "
+                f"stale={lease.get('is_stale')} "
+                f"expires={lease.get('lease_expires_at') or '(none)'}"
+            )
+    if rendered["workers"]:
+        print("Workers:")
+        for worker in rendered["workers"]:
+            print(
+                f"- {worker['worker_id']}: "
+                f"campaign_leases={worker['active_campaign_lease_total']} "
+                f"stale_campaign_leases={worker['stale_campaign_lease_total']} "
+                f"workspace_leases={worker['active_workspace_lease_total']} "
+                f"stale_workspace_leases={worker['stale_workspace_lease_total']}"
+            )
+    for item in rendered["campaigns"]:
+        lease = item["lease"]
+        print(
+            f"- {item['workspace_id']}/{item['track_id']}/{item['campaign_id']}: "
+            f"status={item['status']} desired={item['desired_state']} "
+            f"runnable={item['runnable']} "
+            f"worker={lease.get('lease_owner') or '(none)'} "
+            f"stale={lease.get('is_stale')} "
+            f"retries={_format_count_map(item['retry_counts'])} "
+            f"failures={_format_count_map(item['failure_class_counts'])}"
+        )
+    if args.output is not None:
+        print(f"Wrote output to {args.output}")
+    return 0
+
+
 def _handle_export_root_campaign_report(args: argparse.Namespace) -> int:
     rendered = _render_root_campaign_listing(
         root=args.root,
@@ -4779,6 +5337,10 @@ def _handle_run_campaign_worker(args: argparse.Namespace) -> int:
 
 
 def _handle_pause_campaign(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     try:
         track_id, campaign = resolve_workspace_campaign_run(
             root=args.root,
@@ -4817,6 +5379,10 @@ def _handle_pause_campaign(args: argparse.Namespace) -> int:
 
 
 def _handle_cancel_campaign(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     try:
         track_id, campaign = resolve_workspace_campaign_run(
             root=args.root,
@@ -4855,6 +5421,10 @@ def _handle_cancel_campaign(args: argparse.Namespace) -> int:
 
 
 def _handle_resume_campaign(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     try:
         track_id, campaign = resolve_workspace_campaign_run(
             root=args.root,
@@ -4905,6 +5475,10 @@ def _handle_resume_campaign(args: argparse.Namespace) -> int:
 
 
 def _handle_show_campaign(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     try:
         _, campaign = resolve_workspace_campaign_run(
             root=args.root,
@@ -4938,6 +5512,10 @@ def _handle_show_campaign(args: argparse.Namespace) -> int:
 
 
 def _handle_show_campaigns(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     rendered = _render_workspace_campaign_listing(
         root=args.root,
         workspace_id=args.workspace_id,

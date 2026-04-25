@@ -28,6 +28,7 @@ from autoharness.inspection_handlers import (
     _handle_show_root_champions,
     _handle_show_root_memory,
     _handle_show_root_summary,
+    _handle_show_workspace_summary,
     _handle_tail_campaign_events,
     _handle_validate_artifact_file,
     _handle_validate_report_file,
@@ -59,6 +60,7 @@ from autoharness.campaign_handlers import (
     _handle_pause_campaign,
     _handle_run_campaign,
     _handle_run_campaign_worker,
+    _handle_show_campaign_queue,
     _handle_show_campaigns,
 )
 from autoharness.campaign_handlers import (
@@ -81,6 +83,7 @@ from autoharness.promotion_handlers import _handle_compare_to_champion
 from autoharness.promotion_handlers import _handle_transfer_root_champions
 from autoharness.promotion_handlers import _handle_transfer_champion
 from autoharness.workspace_handlers import (
+    _handle_init_workspace,
     _handle_prune_artifacts,
     _handle_set_provider_profile,
     _handle_set_retention_policy,
@@ -112,6 +115,47 @@ def test_register_command_parsers_wires_run_planned_iteration_handler() -> None:
     assert args.command == "run-planned-iteration"
     assert args.handler is _stub_run_planned_iteration
     assert args.plan == Path("saved-plan.json")
+
+
+def test_register_command_parsers_wires_init_and_report_aliases() -> None:
+    parser = _build_registered_parser()
+
+    init_args = parser.parse_args(
+        [
+            "init",
+            "--workspace-id",
+            "demo",
+            "--objective",
+            "Improve pass rate",
+            "--benchmark",
+            "generic-smoke",
+        ]
+    )
+    report_args = parser.parse_args(["report"])
+
+    assert init_args.command == "init"
+    assert init_args.handler is _handle_init_workspace
+    assert report_args.command == "report"
+    assert report_args.handler is _handle_show_workspace_summary
+    assert report_args.workspace_id is None
+
+
+def test_register_command_parsers_wires_optimize_alias() -> None:
+    parser = _build_registered_parser()
+
+    args = parser.parse_args(
+        [
+            "optimize",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+        ]
+    )
+
+    assert args.command == "optimize"
+    assert args.handler is _handle_run_campaign
+    assert args.workspace_id is None
 
 
 def test_register_command_parsers_wires_show_plan_file_command() -> None:
@@ -210,6 +254,56 @@ def test_register_command_parsers_wires_background_campaign_commands() -> None:
     assert worker_args.worker_id == "worker-a"
     assert pause_args.handler is _handle_pause_campaign
     assert cancel_args.handler is _handle_cancel_campaign
+
+
+def test_register_command_parsers_allow_common_commands_without_workspace_id() -> None:
+    parser = _build_registered_parser()
+
+    generate_args = parser.parse_args(
+        [
+            "generate-proposal",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+        ]
+    )
+    iteration_args = parser.parse_args(
+        [
+            "run-iteration",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+            "--hypothesis",
+            "candidate",
+        ]
+    )
+    campaign_args = parser.parse_args(
+        [
+            "run-campaign",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+        ]
+    )
+    compare_args = parser.parse_args(
+        [
+            "compare-to-champion",
+            "--record-id",
+            "record-1",
+        ]
+    )
+
+    assert generate_args.handler is _handle_generate_proposal
+    assert generate_args.workspace_id is None
+    assert iteration_args.handler is _handle_run_iteration
+    assert iteration_args.workspace_id is None
+    assert campaign_args.handler is _handle_run_campaign
+    assert campaign_args.workspace_id is None
+    assert compare_args.handler is _handle_compare_to_champion
+    assert compare_args.workspace_id is None
 
 
 def test_register_command_parsers_wires_provider_retention_and_event_commands() -> None:
@@ -956,6 +1050,25 @@ def test_register_command_parsers_wires_show_root_campaigns_command() -> None:
 
     assert args.command == "show-root-campaigns"
     assert args.handler is _handle_show_root_campaigns
+    assert args.workspace_id == ["demo"]
+    assert args.track_id == ["main"]
+
+
+def test_register_command_parsers_wires_show_campaign_queue_command() -> None:
+    parser = _build_registered_parser()
+
+    args = parser.parse_args(
+        [
+            "show-campaign-queue",
+            "--workspace-id",
+            "demo",
+            "--track-id",
+            "main",
+        ]
+    )
+
+    assert args.command == "show-campaign-queue"
+    assert args.handler is _handle_show_campaign_queue
     assert args.workspace_id == ["demo"]
     assert args.track_id == ["main"]
 

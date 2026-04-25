@@ -46,6 +46,17 @@ def _workspace_id_argument_spec() -> tuple[tuple[str, ...], dict[str, object]]:
     return _argument_spec("--workspace-id", required=True)
 
 
+def _optional_workspace_id_argument_spec() -> tuple[tuple[str, ...], dict[str, object]]:
+    return _argument_spec(
+        "--workspace-id",
+        default=None,
+        help=(
+            "Optional workspace id. If omitted and exactly one workspace exists "
+            "under --root, autoharness uses it automatically."
+        ),
+    )
+
+
 def _optional_track_selection_argument_spec() -> tuple[tuple[str, ...], dict[str, object]]:
     return _argument_spec("--track-id", default=None)
 
@@ -529,6 +540,10 @@ def _settings_path_argument_spec(
 
 def _add_workspace_id_argument(parser: argparse.ArgumentParser) -> None:
     _add_argument_specs(parser, [_workspace_id_argument_spec()])
+
+
+def _add_optional_workspace_id_argument(parser: argparse.ArgumentParser) -> None:
+    _add_argument_specs(parser, [_optional_workspace_id_argument_spec()])
 
 
 def _add_required_adapter_argument(

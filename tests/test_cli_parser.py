@@ -19,6 +19,18 @@ def test_build_parser_wires_run_planned_iteration_handler() -> None:
     assert args.plan == Path("saved-plan.json")
 
 
+def test_build_parser_top_level_help_surfaces_common_path() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    help_text = parser.format_help()
+
+    assert "Optimize an existing harness repo" in help_text
+    assert "Common path:" in help_text
+    assert "autoharness init --workspace-id demo" in help_text
+    assert "autoharness optimize" in help_text
+    assert "autoharness report" in help_text
+
+
 def test_build_parser_parses_show_plan_file_arguments() -> None:
     parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
 
@@ -116,6 +128,96 @@ def test_build_parser_parses_background_campaign_arguments() -> None:
 
     assert args.command == "run-campaign"
     assert args.background is True
+
+
+def test_build_parser_allows_common_commands_without_workspace_id() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    generate_args = parser.parse_args(
+        [
+            "generate-proposal",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+        ]
+    )
+    iteration_args = parser.parse_args(
+        [
+            "run-iteration",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+            "--hypothesis",
+            "candidate",
+        ]
+    )
+    campaign_args = parser.parse_args(
+        [
+            "run-campaign",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+        ]
+    )
+    compare_args = parser.parse_args(
+        [
+            "compare-to-champion",
+            "--record-id",
+            "record-1",
+        ]
+    )
+
+    assert generate_args.command == "generate-proposal"
+    assert generate_args.workspace_id is None
+    assert iteration_args.command == "run-iteration"
+    assert iteration_args.workspace_id is None
+    assert campaign_args.command == "run-campaign"
+    assert campaign_args.workspace_id is None
+    assert compare_args.command == "compare-to-champion"
+    assert compare_args.workspace_id is None
+
+
+def test_build_parser_parses_init_and_report_aliases() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    init_args = parser.parse_args(
+        [
+            "init",
+            "--workspace-id",
+            "demo",
+            "--objective",
+            "Improve pass rate",
+            "--benchmark",
+            "generic-smoke",
+        ]
+    )
+    report_args = parser.parse_args(["report"])
+
+    assert init_args.command == "init"
+    assert init_args.workspace_id == "demo"
+    assert init_args.benchmark == "generic-smoke"
+    assert report_args.command == "report"
+    assert report_args.workspace_id is None
+
+
+def test_build_parser_parses_optimize_alias() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    args = parser.parse_args(
+        [
+            "optimize",
+            "--adapter",
+            "generic_command",
+            "--config",
+            "config.yaml",
+        ]
+    )
+
+    assert args.command == "optimize"
+    assert args.workspace_id is None
 
 
 def test_build_parser_parses_campaign_worker_arguments() -> None:
@@ -939,6 +1041,24 @@ def test_build_parser_parses_show_root_campaigns_arguments() -> None:
     )
 
     assert args.command == "show-root-campaigns"
+    assert args.workspace_id == ["demo"]
+    assert args.track_id == ["main"]
+
+
+def test_build_parser_parses_show_campaign_queue_arguments() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    args = parser.parse_args(
+        [
+            "show-campaign-queue",
+            "--workspace-id",
+            "demo",
+            "--track-id",
+            "main",
+        ]
+    )
+
+    assert args.command == "show-campaign-queue"
     assert args.workspace_id == ["demo"]
     assert args.track_id == ["main"]
 

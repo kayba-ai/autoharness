@@ -11,6 +11,7 @@ from .cli_arguments import (
     _add_notes_argument,
     _add_optional_output_argument,
     _add_optional_track_selection_argument,
+    _add_optional_workspace_id_argument,
     _add_required_output_argument,
     _add_required_record_id_argument,
     _add_required_target_root_argument,
@@ -33,7 +34,7 @@ def register_promotion_parsers(subparsers) -> None:
         "promote",
         help="Replay one recorded candidate onto a target harness and mark it champion.",
     )
-    _add_workspace_id_argument(promote)
+    _add_optional_workspace_id_argument(promote)
     _add_required_record_id_argument(promote)
     _add_required_target_root_argument(promote)
     _add_optional_track_selection_argument(promote)
@@ -120,7 +121,7 @@ def register_promotion_parsers(subparsers) -> None:
         "compare-to-champion",
         help="Compare one recorded candidate against the active track champion.",
     )
-    _add_workspace_id_argument(compare_to_champion)
+    _add_optional_workspace_id_argument(compare_to_champion)
     _add_required_record_id_argument(compare_to_champion)
     _add_optional_track_selection_argument(compare_to_champion)
     _add_workspace_root_argument(compare_to_champion)
@@ -150,7 +151,7 @@ def register_promotion_parsers(subparsers) -> None:
         "promote-from-compare",
         help="Compare a recorded candidate to the active champion and promote only if it wins.",
     )
-    _add_workspace_id_argument(promote_from_compare)
+    _add_optional_workspace_id_argument(promote_from_compare)
     _add_required_record_id_argument(promote_from_compare)
     _add_required_target_root_argument(promote_from_compare)
     _add_optional_track_selection_argument(promote_from_compare)

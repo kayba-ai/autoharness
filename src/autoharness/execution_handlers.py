@@ -13,6 +13,7 @@ from .adapters import get_adapter
 from .campaigns import TrackBenchmarkPolicy
 from .cli_support import (
     _load_structured_file,
+    _resolve_workspace_id,
     _resolve_workspace_track,
     _resolved_track_policy_details,
 )
@@ -706,6 +707,10 @@ def _handle_run_benchmark(args: argparse.Namespace) -> int:
 
 
 def _handle_run_iteration(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     workspace = load_workspace(args.root, args.workspace_id)
     state = load_workspace_state(args.root, args.workspace_id)
     _require_active_workspace_state(workspace_id=args.workspace_id, state=state)

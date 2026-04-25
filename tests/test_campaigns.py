@@ -138,9 +138,7 @@ def test_run_and_resume_campaign(tmp_path: Path, capsys) -> None:
     assert (
         main(
             [
-                "run-campaign",
-                "--workspace-id",
-                "demo",
+                "optimize",
                 "--adapter",
                 "generic_command",
                 "--config",
@@ -182,8 +180,6 @@ def test_run_and_resume_campaign(tmp_path: Path, capsys) -> None:
         main(
             [
                 "resume-campaign",
-                "--workspace-id",
-                "demo",
                 "--campaign-id",
                 campaign_id,
                 "--root",
@@ -205,8 +201,6 @@ def test_run_and_resume_campaign(tmp_path: Path, capsys) -> None:
         main(
             [
                 "show-campaigns",
-                "--workspace-id",
-                "demo",
                 "--root",
                 str(workspaces_root),
                 "--json",
@@ -497,6 +491,39 @@ def test_run_and_resume_campaign(tmp_path: Path, capsys) -> None:
     assert invalid_validation["valid"] is False
 
 
+def test_common_path_commands_require_workspace_id_when_multiple_workspaces_exist(
+    tmp_path: Path,
+) -> None:
+    settings, workspaces_root, _ = _init_demo_workspace(tmp_path)
+    assert (
+        main(
+            [
+                "init-workspace",
+                "--workspace-id",
+                "demo_b",
+                "--objective",
+                "Improve another harness",
+                "--benchmark",
+                "tau-bench-airline",
+                "--settings",
+                str(settings),
+                "--root",
+                str(workspaces_root),
+            ]
+        )
+        == 0
+    )
+
+    with pytest.raises(SystemExit, match="multiple workspaces were found"):
+        main(
+            [
+                "show-campaigns",
+                "--root",
+                str(workspaces_root),
+            ]
+        )
+
+
 def test_run_campaign_blocks_auto_promotion_for_flaky_repeated_validation(
     tmp_path: Path, capsys
 ) -> None:
@@ -706,6 +733,117 @@ def test_run_campaign_can_allow_flaky_auto_promotion_when_enabled(
     assert candidate["promoted"] is True
     assert candidate["comparison_decision"] == "promoted_without_prior_champion"
     assert (
+        workspaces_root / "demo" / "tracks" / "main" / "champion.json"
+    ).exists()
+
+
+def test_run_campaign_blocks_auto_promotion_for_wide_confidence_interval(
+    tmp_path: Path, capsys
+) -> None:
+    settings = tmp_path / ".autoharness" / "settings.yaml"
+    workspaces_root = tmp_path / ".autoharness" / "workspaces"
+    target_root = tmp_path / "candidate"
+    target_root.mkdir()
+
+    main(["setup", "--output", str(settings)])
+    main(
+        [
+            "init-workspace",
+            "--workspace-id",
+            "demo",
+            "--objective",
+            "Improve harness correctness",
+            "--benchmark",
+            "tau-bench-airline",
+            "--settings",
+            str(settings),
+            "--root",
+            str(workspaces_root),
+        ]
+    )
+
+    counter_path = tmp_path / "repeat_counter.txt"
+    config_path = tmp_path / "generic_stability_gate.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "benchmark_name": "campaign-stability-gate",
+                "workdir": str(tmp_path),
+                "command": [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import json; "
+                        f"from pathlib import Path; path = Path({str(counter_path)!r}); "
+                        "count = int(path.read_text(encoding='utf-8')) if path.exists() else 0; "
+                        "path.write_text(str(count + 1), encoding='utf-8'); "
+                        "print(json.dumps({'pass_rate': 1.0, 'score': 1.0}))"
+                    ),
+                ],
+                "metrics_parser": {"format": "json_stdout"},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    edit_plan_path = tmp_path / "alpha.yaml"
+    edit_plan_path.write_text(
+        yaml.safe_dump(
+            {
+                "operations": [
+                    {
+                        "type": "write_file",
+                        "path": "alpha.txt",
+                        "content": "alpha\n",
+                    }
+                ]
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "run-campaign",
+                "--workspace-id",
+                "demo",
+                "--adapter",
+                "generic_command",
+                "--stage",
+                "validation",
+                "--config",
+                str(config_path),
+                "--target-root",
+                str(target_root),
+                "--edit-plan",
+                str(edit_plan_path),
+                "--repeat",
+                "2",
+                "--auto-promote",
+                "--auto-promote-min-stage",
+                "validation",
+                "--root",
+                str(workspaces_root),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    rendered = json.loads(capsys.readouterr().out)
+    campaign = rendered["campaign"]
+    candidate = campaign["candidates"][0]
+
+    assert counter_path.read_text(encoding="utf-8") == "4"
+    assert candidate["attempt_count"] == 2
+    assert candidate["retry_counts"]["unstable_validation"] == 1
+    assert candidate["status"] == "success"
+    assert candidate["promoted"] is False
+    assert candidate["comparison_decision"] == "stability_gate_failed"
+    assert not (
         workspaces_root / "demo" / "tracks" / "main" / "champion.json"
     ).exists()
 
@@ -5603,6 +5741,218 @@ def test_pause_cancel_and_resume_background_campaigns(tmp_path: Path, capsys) ->
     )
     canceled_worker = json.loads(capsys.readouterr().out)
     assert canceled_worker["claimed_campaign_total"] == 0
+
+
+def test_show_campaign_queue_reports_worker_retry_and_lease_state(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _, workspaces_root, target_root = _init_demo_workspace(tmp_path)
+    config_path = _write_success_config(tmp_path, name="queue-inspection")
+    alpha_plan_path = _write_edit_plan(tmp_path, filename="queue-alpha")
+    beta_plan_path = _write_edit_plan(tmp_path, filename="queue-beta")
+
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "run-campaign",
+                "--workspace-id",
+                "demo",
+                "--adapter",
+                "generic_command",
+                "--config",
+                str(config_path),
+                "--target-root",
+                str(target_root),
+                "--edit-plan",
+                str(alpha_plan_path),
+                "--background",
+                "--root",
+                str(workspaces_root),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    running_campaign_id = json.loads(capsys.readouterr().out)["campaign"]["campaign_run_id"]
+
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "run-campaign",
+                "--workspace-id",
+                "demo",
+                "--adapter",
+                "generic_command",
+                "--config",
+                str(config_path),
+                "--target-root",
+                str(target_root),
+                "--edit-plan",
+                str(beta_plan_path),
+                "--background",
+                "--root",
+                str(workspaces_root),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    stale_campaign_id = json.loads(capsys.readouterr().out)["campaign"]["campaign_run_id"]
+
+    current_time = datetime.now(UTC).replace(microsecond=0)
+    claimed_at = (current_time - timedelta(seconds=30)).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+    expires_at = (current_time + timedelta(minutes=5)).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
+    running_campaign = campaign_runs.load_campaign_run(
+        root=workspaces_root,
+        workspace_id="demo",
+        track_id="main",
+        campaign_run_id=running_campaign_id,
+    )
+    campaign_runs.persist_campaign_run(
+        root=workspaces_root,
+        campaign=replace(
+            running_campaign,
+            status="running",
+            desired_state="run",
+            stop_reason=None,
+            next_candidate_index=1,
+            lease_owner="worker_a",
+            lease_claimed_at=claimed_at,
+            lease_heartbeat_at=claimed_at,
+            lease_expires_at=expires_at,
+            candidates=(
+                campaign_runs.CampaignCandidateRun(
+                    index=0,
+                    attempt_count=2,
+                    retry_counts={"benchmark_timeout": 2},
+                    failure_class="benchmark_timeout",
+                    status="failed",
+                ),
+            ),
+        ),
+    )
+
+    stale_timestamp = _stale_utc_timestamp()
+    stale_campaign = campaign_runs.load_campaign_run(
+        root=workspaces_root,
+        workspace_id="demo",
+        track_id="main",
+        campaign_run_id=stale_campaign_id,
+    )
+    campaign_runs.persist_campaign_run(
+        root=workspaces_root,
+        campaign=replace(
+            stale_campaign,
+            status="paused",
+            desired_state="run",
+            stop_reason="lease_lost",
+            next_candidate_index=1,
+            lease_owner="worker_b",
+            lease_claimed_at=stale_timestamp,
+            lease_heartbeat_at=stale_timestamp,
+            lease_expires_at=stale_timestamp,
+            candidates=(
+                campaign_runs.CampaignCandidateRun(
+                    index=0,
+                    attempt_count=1,
+                    retry_counts={"generation_timeout": 1},
+                    failure_class="generation_timeout",
+                    status="failed",
+                ),
+            ),
+        ),
+    )
+
+    workspace_lease_path = campaign_runs.workspace_campaign_lease_path(
+        root=workspaces_root,
+        workspace_id="demo",
+    )
+    workspace_lease_path.write_text(
+        json.dumps(
+            {
+                "format_version": "autoharness.workspace_campaign_lease.v1",
+                "workspace_id": "demo",
+                "lease_owner": "worker_a",
+                "lease_claimed_at": claimed_at,
+                "lease_heartbeat_at": claimed_at,
+                "lease_expires_at": expires_at,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "show-campaign-queue",
+                "--workspace-id",
+                "demo",
+                "--track-id",
+                "main",
+                "--root",
+                str(workspaces_root),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["workspace_total"] == 1
+    assert rendered["track_total"] == 1
+    assert rendered["campaign_total"] == 2
+    assert rendered["runnable_campaign_total"] == 2
+    assert rendered["worker_total"] == 2
+    assert rendered["active_worker_total"] == 1
+    assert rendered["campaign_status_counts"] == {"paused": 1, "running": 1}
+    assert rendered["desired_state_counts"] == {"run": 2}
+    assert rendered["lease_state_counts"]["campaign_active"] == 1
+    assert rendered["lease_state_counts"]["campaign_stale"] == 1
+    assert rendered["lease_state_counts"]["workspace_active"] == 1
+    assert rendered["retry_counts"] == {
+        "benchmark_timeout": 2,
+        "generation_timeout": 1,
+    }
+    assert rendered["failure_class_counts"] == {
+        "benchmark_timeout": 1,
+        "generation_timeout": 1,
+    }
+    assert rendered["event_total"] >= 2
+    assert rendered["resource_usage"]["generation_total_tokens"] == 0
+    assert rendered["resource_usage"]["benchmark_total_cost"] == 0.0
+
+    workspace_leases = {
+        lease["workspace_id"]: lease for lease in rendered["workspace_leases"]
+    }
+    assert workspace_leases["demo"]["lease_owner"] == "worker_a"
+    assert workspace_leases["demo"]["is_stale"] is False
+
+    workers = {worker["worker_id"]: worker for worker in rendered["workers"]}
+    assert workers["worker_a"]["active_campaign_lease_total"] == 1
+    assert workers["worker_a"]["active_workspace_lease_total"] == 1
+    assert workers["worker_b"]["stale_campaign_lease_total"] == 1
+
+    campaigns = {item["campaign_id"]: item for item in rendered["campaigns"]}
+    assert campaigns[running_campaign_id]["runnable"] is True
+    assert campaigns[running_campaign_id]["retry_total"] == 2
+    assert campaigns[running_campaign_id]["lease"]["is_stale"] is False
+    assert campaigns[running_campaign_id]["failure_class_counts"] == {
+        "benchmark_timeout": 1
+    }
+    assert campaigns[stale_campaign_id]["runnable"] is True
+    assert campaigns[stale_campaign_id]["lease"]["is_stale"] is True
+    assert campaigns[stale_campaign_id]["failure_class_counts"] == {
+        "generation_timeout": 1
+    }
 
 
 def test_provider_profile_retention_and_root_memory_commands(

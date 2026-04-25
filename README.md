@@ -26,10 +26,10 @@ python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 ## How It Works
 
 - `setup` defines autonomy plus editable and protected surfaces.
-- `init-workspace` creates durable state for one optimization effort.
+- `init` creates durable state for one optimization effort.
 - `run-benchmark` executes one benchmark directly.
 - `generate-proposal` previews one candidate change without running it.
-- `run-iteration` or `run-campaign` executes one candidate or a resumable search loop.
+- `run-iteration` or `optimize` executes one candidate or a resumable search loop.
 - `promote` or `promote-from-compare` moves a winner into champion state.
 
 ## Mental Model
@@ -62,7 +62,7 @@ Bootstrap a workspace and run the benchmark:
 
 ```bash
 autoharness setup --autonomy bounded --editable-surface src --editable-surface prompts
-autoharness init-workspace \
+autoharness init \
   --workspace-id demo \
   --objective "Improve pass rate without regressions" \
   --benchmark generic-smoke
@@ -89,7 +89,7 @@ autoharness generate-proposal \
 Run the outer loop:
 
 ```bash
-autoharness run-campaign \
+autoharness optimize \
   --workspace-id demo \
   --adapter generic_command \
   --config benchmark.yaml \
@@ -98,14 +98,18 @@ autoharness run-campaign \
   --target-root /path/to/harness \
   --stage screening \
   --max-iterations 10
+autoharness report --workspace-id demo
 ```
 
 ## Docs
 
 - [Quickstart](docs/quickstart.md)
-- [Design Notes](docs/design.md)
-- [Implementation Plan](docs/implementation-plan.md)
+- [Usage](docs/usage.md)
 
-## Status
+## For Power Users
 
-autoharness already includes proposal generation, benchmark execution, repeated validation, promotion, resumable campaigns, and portable artifacts. The current gaps are optimizer quality and operational hardening rather than missing control-plane basics.
+- Background campaign workers plus queue and worker-state inspection
+- Root-level memory, transfer suggestions, and portfolio scheduling
+- Retention policies, pruning, and portable report and bundle exports
+- Event logs, inspection commands, and operational reporting surfaces
+- Python plugin hooks for generators, preflight checks, and search strategies

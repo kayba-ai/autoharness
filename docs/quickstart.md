@@ -51,7 +51,7 @@ Modes:
 ## 4. Initialize a Workspace
 
 ```bash
-autoharness init-workspace \
+autoharness init \
   --workspace-id demo \
   --objective "Improve pass rate without regressions" \
   --benchmark generic-smoke
@@ -101,7 +101,7 @@ This persists a proposal artifact without executing the benchmark.
 For a generator-driven outer loop:
 
 ```bash
-autoharness run-campaign \
+autoharness optimize \
   --workspace-id demo \
   --adapter generic_command \
   --config benchmark.yaml \
@@ -113,6 +113,12 @@ autoharness run-campaign \
 ```
 
 This uses proposal generation plus benchmark execution to run a resumable search loop.
+
+Inspect the current workspace summary at any point with:
+
+```bash
+autoharness report --workspace-id demo
+```
 
 ## 8. Know Where State Lives
 

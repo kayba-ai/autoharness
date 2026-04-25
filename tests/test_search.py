@@ -381,6 +381,60 @@ def test_compute_candidate_branch_score_rewards_novelty_and_penalizes_flakes() -
     assert flaky_rationale["stability_penalty"] >= 2.0
 
 
+def test_compute_candidate_branch_score_penalizes_retry_history_and_low_stability() -> None:
+    clean_candidate = {
+        "index": 0,
+        "status": "success",
+        "failure_class": None,
+        "intervention_class": "source",
+        "promoted": False,
+        "comparison_decision": "improved",
+        "stability_score": 0.95,
+        "confidence_interval_width": 0.1,
+        "attempt_count": 1,
+        "retry_count_total": 0,
+        "generation_request": {
+            "stage": "validation",
+            "failure_focus_task_ids": ["task_a"],
+            "regressed_task_ids": [],
+        },
+    }
+    unstable_retry_candidate = {
+        "index": 1,
+        "status": "pending",
+        "failure_class": "benchmark_timeout",
+        "intervention_class": "source",
+        "promoted": False,
+        "comparison_decision": "inconclusive",
+        "stability_score": 0.6,
+        "confidence_interval_width": 0.7,
+        "attempt_count": 3,
+        "retry_count_total": 2,
+        "generation_request": {
+            "stage": "validation",
+            "failure_focus_task_ids": ["task_a"],
+            "regressed_task_ids": [],
+        },
+    }
+
+    clean_score, _clean_rationale = compute_candidate_branch_score(
+        strategy_id="stability_weighted",
+        candidate_snapshot=clean_candidate,
+        attempted_intervention_classes=set(),
+    )
+    unstable_score, unstable_rationale = compute_candidate_branch_score(
+        strategy_id="stability_weighted",
+        candidate_snapshot=unstable_retry_candidate,
+        attempted_intervention_classes=set(),
+    )
+
+    assert clean_score > unstable_score
+    assert unstable_rationale["retry_penalty"] > 0.0
+    assert unstable_rationale["attempt_penalty"] > 0.0
+    assert unstable_rationale["confidence_interval_penalty"] > 0.0
+    assert unstable_rationale["comparison_bonus"] < 0.0
+
+
 def test_rank_beam_candidate_uses_branch_score_as_tie_breaker() -> None:
     group_outcomes = {
         0: {

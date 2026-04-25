@@ -7,7 +7,11 @@ import shutil
 from pathlib import Path
 
 from .autonomy import policy_for_mode
-from .cli_support import _preset_policy_key_for_stage, _resolve_workspace_track
+from .cli_support import (
+    _preset_policy_key_for_stage,
+    _resolve_workspace_id,
+    _resolve_workspace_track,
+)
 from .editing import edit_plan_from_dict, start_edit_session
 from .events import append_workspace_event
 from .mutations import (
@@ -645,6 +649,10 @@ def _transfer_champion_to_destination(
 
 
 def _handle_promote(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     _, state, track_id = _resolve_workspace_track(
         root=args.root,
         workspace_id=args.workspace_id,
@@ -839,6 +847,10 @@ def _handle_transfer_root_champions(args: argparse.Namespace) -> int:
 
 
 def _handle_compare_to_champion(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     comparison = _compute_champion_comparison(
         root=args.root,
         workspace_id=args.workspace_id,
@@ -882,6 +894,10 @@ def _handle_compare_to_champion(args: argparse.Namespace) -> int:
 
 
 def _handle_promote_from_compare(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     _, state, track_id = _resolve_workspace_track(
         root=args.root,
         workspace_id=args.workspace_id,

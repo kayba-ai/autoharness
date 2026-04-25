@@ -57,8 +57,6 @@ def test_run_iteration_records_one_hypothesis(tmp_path: Path) -> None:
     exit_code = main(
         [
             "run-iteration",
-            "--workspace-id",
-            "demo",
             "--adapter",
             "generic_command",
             "--config",
@@ -6215,8 +6213,6 @@ def test_compare_to_champion_recomputes_baseline_against_active_manifest(
         main(
             [
                 "compare-to-champion",
-                "--workspace-id",
-                "demo",
                 "--record-id",
                 candidate_record_id,
                 "--root",
@@ -6408,8 +6404,6 @@ def test_promote_from_compare_promotes_only_after_successful_comparison(
         main(
             [
                 "promote-from-compare",
-                "--workspace-id",
-                "demo",
                 "--record-id",
                 strong_record_id,
                 "--root",

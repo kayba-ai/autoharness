@@ -74,8 +74,6 @@ def test_generate_proposal_persists_artifacts_and_show_proposal(
         main(
             [
                 "generate-proposal",
-                "--workspace-id",
-                "demo",
                 "--adapter",
                 "generic_command",
                 "--config",
@@ -115,8 +113,6 @@ def test_generate_proposal_persists_artifacts_and_show_proposal(
         main(
             [
                 "show-proposal",
-                "--workspace-id",
-                "demo",
                 "--proposal-id",
                 proposal_id,
                 "--root",
@@ -224,8 +220,6 @@ def test_show_and_export_proposals(
         main(
             [
                 "show-proposals",
-                "--workspace-id",
-                "demo",
                 "--hypothesis-contains",
                 "beta",
                 "--root",
@@ -353,6 +347,7 @@ def test_list_and_show_generators(tmp_path: Path, capsys) -> None:
         "base_url",
         "proposal_scope",
         "max_operations",
+        "max_repair_attempts",
         "fallback_generators",
     ]
 

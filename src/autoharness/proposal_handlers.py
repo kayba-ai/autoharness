@@ -8,7 +8,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .adapters import get_adapter
-from .cli_support import _load_structured_file, _resolve_workspace_track
+from .cli_support import (
+    _load_structured_file,
+    _resolve_workspace_id,
+    _resolve_workspace_track,
+)
 from .editing import edit_plan_from_dict, start_edit_session
 from .execution_support import (
     _compose_benchmark_config,
@@ -65,10 +69,14 @@ def _preview_state_from_application(application: dict[str, object]) -> str:
 
 
 def _resolve_saved_proposal(args: argparse.Namespace):
+    workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     try:
         return resolve_workspace_proposal(
             root=args.root,
-            workspace_id=args.workspace_id,
+            workspace_id=workspace_id,
             proposal_id=args.proposal_id,
             track_id=args.track_id,
         )
@@ -77,22 +85,26 @@ def _resolve_saved_proposal(args: argparse.Namespace):
 
 
 def _prepare_proposal_listing(args: argparse.Namespace):
+    workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     if args.track_id is not None:
         workspace, _, resolved_track_id = _resolve_workspace_track(
             root=args.root,
-            workspace_id=args.workspace_id,
+            workspace_id=workspace_id,
             requested_track_id=args.track_id,
         )
     else:
-        workspace = load_workspace(args.root, args.workspace_id)
+        workspace = load_workspace(args.root, workspace_id)
         resolved_track_id = None
     spec = ProposalQuerySpec.from_args(args, resolved_track_id=resolved_track_id)
     rendered = _build_proposal_listing_payload(
         root=args.root,
-        workspace_id=args.workspace_id,
+        workspace_id=workspace_id,
         spec=spec,
     )
-    return workspace, resolved_track_id, spec, rendered
+    return workspace_id, workspace, resolved_track_id, spec, rendered
 
 
 def _handle_list_generators(args: argparse.Namespace) -> int:
@@ -207,6 +219,10 @@ def _generation_resource_usage(metadata: dict[str, object]) -> dict[str, float |
 
 
 def _handle_generate_proposal(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     workspace, state, track_id = _resolve_workspace_track(
         root=args.root,
         workspace_id=args.workspace_id,
@@ -536,6 +552,10 @@ def _handle_generate_proposal(args: argparse.Namespace) -> int:
 
 
 def _handle_show_proposal(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     track_id, proposal = _resolve_saved_proposal(args)
 
     artifact_paths = resolve_proposal_artifact_paths(root=args.root, proposal=proposal)
@@ -579,6 +599,10 @@ def _handle_show_proposal(args: argparse.Namespace) -> int:
 
 
 def _handle_apply_proposal(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     track_id, proposal = _resolve_saved_proposal(args)
     workspace = load_workspace(args.root, args.workspace_id)
     target_root = args.target_root or Path(proposal.target_root)
@@ -684,6 +708,10 @@ def _build_run_iteration_args_from_proposal(
 
 
 def _handle_run_proposal(args: argparse.Namespace) -> int:
+    args.workspace_id = _resolve_workspace_id(
+        root=args.root,
+        requested_workspace_id=args.workspace_id,
+    )
     track_id, proposal = _resolve_saved_proposal(args)
     load_proposal_effective_config(root=args.root, proposal=proposal)
     explicit_preflight_commands = list(getattr(args, "preflight_command", []))
@@ -736,7 +764,13 @@ def _handle_run_proposal(args: argparse.Namespace) -> int:
 
 
 def _handle_show_proposals(args: argparse.Namespace) -> int:
-    _, resolved_track_id, spec, rendered = _prepare_proposal_listing(args)
+    (
+        args.workspace_id,
+        _,
+        resolved_track_id,
+        spec,
+        rendered,
+    ) = _prepare_proposal_listing(args)
     rendered_items = rendered["proposals"]
     non_executable_proposals_total = rendered["non_executable_proposals_total"]
 
@@ -781,7 +815,7 @@ def _handle_show_proposals(args: argparse.Namespace) -> int:
 
 
 def _handle_export_proposals(args: argparse.Namespace) -> int:
-    _, _, _, rendered = _prepare_proposal_listing(args)
+    args.workspace_id, _, _, _, rendered = _prepare_proposal_listing(args)
     output_format = _export_listing_payload(
         output=args.output,
         explicit_format=args.format,

@@ -87,6 +87,39 @@ def test_init_workspace_uses_settings(tmp_path: Path) -> None:
     assert track_policy["regression_preset"] is None
 
 
+def test_init_alias_and_report_alias_support_single_workspace_flow(
+    tmp_path: Path, capsys
+) -> None:
+    settings = tmp_path / ".autoharness" / "settings.yaml"
+    main(["setup", "--output", str(settings)])
+
+    workspaces_root = tmp_path / ".autoharness" / "workspaces"
+    assert (
+        main(
+            [
+                "init",
+                "--workspace-id",
+                "demo",
+                "--objective",
+                "Improve harness correctness",
+                "--benchmark",
+                "tau-bench-airline",
+                "--settings",
+                str(settings),
+                "--root",
+                str(workspaces_root),
+            ]
+        )
+        == 0
+    )
+
+    capsys.readouterr()
+    assert main(["report", "--root", str(workspaces_root), "--json"]) == 0
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["workspace_id"] == "demo"
+    assert rendered["counts"]["tracks_total"] == 1
+
+
 def test_show_and_set_promotion_policy_commands(tmp_path: Path, capsys) -> None:
     settings = tmp_path / ".autoharness" / "settings.yaml"
     main(["setup", "--output", str(settings)])
