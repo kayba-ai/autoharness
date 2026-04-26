@@ -14,6 +14,10 @@ def test_guide_writes_project_config_and_benchmark_template(
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("AUTOHARNESS_OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "autoharness.guide_discovery.shutil.which",
+        lambda _command: None,
+    )
     target_root = tmp_path / "sample_repo"
     (target_root / "src").mkdir(parents=True)
     (target_root / "tests").mkdir()
@@ -256,6 +260,10 @@ def test_guide_interactive_tty_refines_key_defaults(
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("AUTOHARNESS_OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "autoharness.guide_discovery.shutil.which",
+        lambda _command: None,
+    )
     target_root = tmp_path / "sample_repo"
     (target_root / "src").mkdir(parents=True)
     (target_root / "tests").mkdir()
@@ -323,6 +331,10 @@ def test_guide_assistant_packet_surfaces_high_priority_open_questions(
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("AUTOHARNESS_OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "autoharness.guide_discovery.shutil.which",
+        lambda _command: None,
+    )
     target_root = tmp_path / "sample_repo"
     target_root.mkdir()
     config_path = tmp_path / "autoharness.yaml"
@@ -353,3 +365,81 @@ def test_guide_assistant_packet_surfaces_high_priority_open_questions(
     question_ids = {entry["id"] for entry in packet_payload["open_questions"]}
     assert "benchmark_command" in question_ids
     assert packet_payload["recommended_next_action"].startswith("Resolve the highest-priority open question")
+
+
+def test_guide_prefers_local_codex_cli_when_available(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("AUTOHARNESS_OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "autoharness.guide_discovery.shutil.which",
+        lambda command: "/usr/bin/codex" if command == "codex" else None,
+    )
+    target_root = tmp_path / "sample_repo"
+    (target_root / "src").mkdir(parents=True)
+    (target_root / "tests").mkdir()
+    config_path = tmp_path / "autoharness.yaml"
+    benchmarks_dir = tmp_path / "benchmarks"
+    summary_path = tmp_path / "autoharness.project.md"
+
+    assert (
+        main(
+            [
+                "guide",
+                "--target-root",
+                str(target_root),
+                "--output-config",
+                str(config_path),
+                "--benchmark-config-dir",
+                str(benchmarks_dir),
+                "--summary-path",
+                str(summary_path),
+            ]
+        )
+        == 0
+    )
+
+    config_payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert config_payload["generator"]["id"] == "codex_cli"
+    assert config_payload["generator"]["options"] == {"sandbox": "read-only"}
+
+
+def test_guide_prefers_openai_when_no_local_assistant_is_available(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("AUTOHARNESS_OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "autoharness.guide_discovery.shutil.which",
+        lambda _command: None,
+    )
+    target_root = tmp_path / "sample_repo"
+    (target_root / "src").mkdir(parents=True)
+    (target_root / "tests").mkdir()
+    config_path = tmp_path / "autoharness.yaml"
+    benchmarks_dir = tmp_path / "benchmarks"
+    summary_path = tmp_path / "autoharness.project.md"
+
+    assert (
+        main(
+            [
+                "guide",
+                "--target-root",
+                str(target_root),
+                "--output-config",
+                str(config_path),
+                "--benchmark-config-dir",
+                str(benchmarks_dir),
+                "--summary-path",
+                str(summary_path),
+            ]
+        )
+        == 0
+    )
+
+    config_payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert config_payload["generator"]["id"] == "openai_responses"
+    assert config_payload["generator"]["options"] == {"proposal_scope": "balanced"}

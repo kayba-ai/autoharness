@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 
 
@@ -69,6 +70,12 @@ def default_generator_selection(
     if assistant == "codex":
         return "codex_cli", {"sandbox": "read-only"}
     if assistant == "claude":
+        return "claude_code", {}
+    codex_available = shutil.which("codex") is not None
+    claude_available = shutil.which("claude") is not None
+    if codex_available:
+        return "codex_cli", {"sandbox": "read-only"}
+    if claude_available:
         return "claude_code", {}
     if os.environ.get("AUTOHARNESS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY"):
         return "openai_responses", {"proposal_scope": "balanced"}

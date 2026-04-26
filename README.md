@@ -25,7 +25,7 @@ python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 
 ## How It Works
 
-- `guide` inspects a repo, asks a few focused setup questions in a TTY, writes a starter `autoharness.yaml` plus benchmark config, and runs a readiness check.
+- `guide` inspects a repo, asks a few focused setup questions in a TTY, stays scriptable with flags in non-interactive use, writes a starter `autoharness.yaml` plus benchmark config, and runs a readiness check.
 - `doctor` reruns config, generator, and benchmark validation when you want an explicit readiness gate.
 - `setup` and `init` remain available when you want to manage bootstrap explicitly.
 - `run-benchmark` executes one benchmark directly.
@@ -57,6 +57,8 @@ Let autoharness generate a starter project config:
 autoharness guide
 ```
 
+In a TTY, `guide` asks a few setup questions. In scripts or CI, use flags like `--non-interactive`, `--benchmark-command`, `--generator`, and `--autonomy`.
+
 If you want Codex or Claude to help you refine the setup, generate an assistant brief too:
 
 ```bash
@@ -68,6 +70,8 @@ autoharness guide --assistant claude
 This writes `autoharness.codex.md` or `autoharness.claude.md` plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
 
 `guide` ends with a doctor pass. Run `autoharness doctor` again later if you want an explicit re-check or a repeated benchmark probe.
+
+On a fresh install, `guide` prefers a local assistant backend when `codex` or `claude` is installed, otherwise uses `openai_responses` when OpenAI credentials are configured, and falls back to `failure_summary` only when no model-backed generator is available.
 
 Then run the benchmark directly:
 
