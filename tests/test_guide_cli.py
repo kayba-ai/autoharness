@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import yaml
 import builtins
+import pytest
+import yaml
 
 from autoharness.cli import main
 
@@ -251,6 +252,99 @@ def test_guide_writes_assistant_brief_when_requested(
     rendered_output = capsys.readouterr().out
     assert f"Wrote assistant brief: {brief_path}" in rendered_output
     assert f"Wrote onboarding packet: {packet_path}" in rendered_output
+
+
+def test_guide_prints_ready_to_paste_next_prompt_for_assistant(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    target_root = tmp_path / "sample_repo"
+    (target_root / "src").mkdir(parents=True)
+    (target_root / "tests").mkdir()
+
+    config_path = tmp_path / "autoharness.yaml"
+    benchmarks_dir = tmp_path / "benchmarks"
+    summary_path = tmp_path / "autoharness.project.md"
+
+    assert (
+        main(
+            [
+                "guide",
+                "--target-root",
+                str(target_root),
+                "--assistant",
+                "codex",
+                "--print-next-prompt",
+                "--output-config",
+                str(config_path),
+                "--benchmark-config-dir",
+                str(benchmarks_dir),
+                "--summary-path",
+                str(summary_path),
+            ]
+        )
+        == 0
+    )
+
+    rendered_output = capsys.readouterr().out
+    assert "Next prompt for Codex:" in rendered_output
+    assert "docs/ONBOARDING.md" in rendered_output
+    assert "autoharness.onboarding.json" in rendered_output
+    assert "autoharness doctor" in rendered_output
+    assert "autoharness optimize" in rendered_output
+
+
+def test_guide_print_next_prompt_requires_assistant(tmp_path: Path) -> None:
+    target_root = tmp_path / "sample_repo"
+    target_root.mkdir()
+
+    with pytest.raises(SystemExit, match="requires `--assistant`"):
+        main(
+            [
+                "guide",
+                "--target-root",
+                str(target_root),
+                "--print-next-prompt",
+            ]
+        )
+
+
+def test_guide_json_output_includes_next_prompt(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    target_root = tmp_path / "sample_repo"
+    (target_root / "src").mkdir(parents=True)
+    (target_root / "tests").mkdir()
+    config_path = tmp_path / "autoharness.yaml"
+    benchmarks_dir = tmp_path / "benchmarks"
+    summary_path = tmp_path / "autoharness.project.md"
+
+    assert (
+        main(
+            [
+                "guide",
+                "--target-root",
+                str(target_root),
+                "--assistant",
+                "claude",
+                "--print-next-prompt",
+                "--output-config",
+                str(config_path),
+                "--benchmark-config-dir",
+                str(benchmarks_dir),
+                "--summary-path",
+                str(summary_path),
+                "--json",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert "next_prompt" in payload
+    assert "autoharness.onboarding.json" in payload["next_prompt"]
+    assert "autoharness report" in payload["next_prompt"]
 
 
 def test_guide_interactive_tty_refines_key_defaults(

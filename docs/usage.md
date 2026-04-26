@@ -25,12 +25,12 @@ autoharness guide
 If you want a coding assistant to drive onboarding, generate a brief first:
 
 ```bash
-autoharness guide --assistant codex
+autoharness guide --assistant codex --print-next-prompt
 # or
-autoharness guide --assistant claude
+autoharness guide --assistant claude --print-next-prompt
 ```
 
-This writes an assistant-specific brief plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
+This writes an assistant-specific brief plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`, then prints a ready-to-paste assistant prompt. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
 
 If `autoharness.yaml` is present, autoharness can auto-bootstrap missing settings and workspace state on the common path. `setup` and `init` remain available when you want to manage that bootstrap explicitly.
 

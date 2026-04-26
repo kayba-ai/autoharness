@@ -132,6 +132,7 @@ def test_register_command_parsers_wires_guide_command() -> None:
             "--generator",
             "failure_summary",
             "--non-interactive",
+            "--print-next-prompt",
         ]
     )
 
@@ -141,6 +142,7 @@ def test_register_command_parsers_wires_guide_command() -> None:
     assert args.assistant == "claude"
     assert args.generator == "failure_summary"
     assert args.non_interactive is True
+    assert args.print_next_prompt is True
 
 
 def test_register_command_parsers_wires_doctor_command() -> None:

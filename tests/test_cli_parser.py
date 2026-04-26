@@ -50,6 +50,7 @@ def test_build_parser_parses_global_project_config_and_guide_command() -> None:
             "autoharness.codex.md",
             "--assistant-packet-path",
             "autoharness.onboarding.json",
+            "--print-next-prompt",
         ]
     )
 
@@ -59,6 +60,7 @@ def test_build_parser_parses_global_project_config_and_guide_command() -> None:
     assert args.assistant == "codex"
     assert args.assistant_brief_path == Path("autoharness.codex.md")
     assert args.assistant_packet_path == Path("autoharness.onboarding.json")
+    assert args.print_next_prompt is True
 
 
 def test_build_parser_parses_interactive_guide_overrides() -> None:

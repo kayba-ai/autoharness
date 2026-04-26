@@ -8,7 +8,10 @@ from pathlib import Path
 
 from .cli_arguments import DEFAULT_SETTINGS_PATH, DEFAULT_WORKSPACES_ROOT
 from .doctor_handlers import _render_doctor_report
-from .guide_assistant import build_assistant_onboarding_packet
+from .guide_assistant import (
+    build_assistant_next_prompt,
+    build_assistant_onboarding_packet,
+)
 from .guide_discovery import (
     default_generator_selection,
     detect_benchmark_command,
@@ -114,6 +117,11 @@ def _guide_is_interactive(args: argparse.Namespace) -> bool:
     if args.non_interactive or args.yes or args.json:
         return False
     return stdio_supports_interaction()
+
+
+def _validate_guide_args(args: argparse.Namespace) -> None:
+    if args.print_next_prompt and args.assistant is None:
+        raise SystemExit("`guide --print-next-prompt` requires `--assistant`.")
 
 
 def _default_generator_options(generator_id: str) -> dict[str, object]:
@@ -378,6 +386,7 @@ def _emit_guide_doctor_summary(doctor_report: dict[str, object]) -> None:
 
 
 def _handle_guide(args: argparse.Namespace) -> int:
+    _validate_guide_args(args)
     target_root = args.target_root.resolve()
     if not target_root.exists():
         raise SystemExit(f"Guide target root not found: {target_root}")
@@ -438,6 +447,7 @@ def _handle_guide(args: argparse.Namespace) -> int:
         ),
         "assistant_brief": assistant_brief,
         "assistant_packet": None,
+        "next_prompt": None,
         "project_config": project_config,
         "benchmark_config": benchmark_config,
         "interactive": _guide_is_interactive(args),
@@ -499,6 +509,20 @@ def _handle_guide(args: argparse.Namespace) -> int:
             rendered["assistant_packet"] = assistant_packet
             _write_json(assistant_packet_path, assistant_packet)
 
+    if (
+        args.print_next_prompt
+        and args.assistant is not None
+        and assistant_brief_path is not None
+        and assistant_packet_path is not None
+    ):
+        rendered["next_prompt"] = build_assistant_next_prompt(
+            assistant=args.assistant,
+            config_path=config_path,
+            benchmark_config_path=benchmark_config_path,
+            assistant_brief_path=assistant_brief_path,
+            assistant_packet_path=assistant_packet_path,
+        )
+
     if _emit_json_output(rendered=rendered, output=args.output, as_json=args.json):
         return 0
 
@@ -530,6 +554,16 @@ def _handle_guide(args: argparse.Namespace) -> int:
         doctor_report = rendered.get("doctor_report")
         if isinstance(doctor_report, dict):
             _emit_guide_doctor_summary(doctor_report)
+        next_prompt = rendered.get("next_prompt")
+        if isinstance(next_prompt, str):
+            assistant_label = {
+                "codex": "Codex",
+                "claude": "Claude Code",
+                "generic": "Assistant",
+            }.get(args.assistant, "Assistant")
+            print()
+            print(f"Next prompt for {assistant_label}:")
+            print(next_prompt)
     if args.output is not None:
         print(f"Wrote output to {args.output}")
     return 0

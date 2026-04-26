@@ -80,6 +80,11 @@ def register_guide_parsers(subparsers) -> None:
         help="Optional path for the generated assistant onboarding packet JSON.",
     )
     guide.add_argument(
+        "--print-next-prompt",
+        action="store_true",
+        help="Print a ready-to-paste assistant onboarding prompt. Requires --assistant.",
+    )
+    guide.add_argument(
         "--output-config",
         type=Path,
         default=Path("autoharness.yaml"),

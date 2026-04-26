@@ -33,9 +33,9 @@ autoharness guide
 If you want Codex or Claude to help refine the setup, generate an assistant brief too:
 
 ```bash
-autoharness guide --assistant codex
+autoharness guide --assistant codex --print-next-prompt
 # or
-autoharness guide --assistant claude
+autoharness guide --assistant claude --print-next-prompt
 ```
 
 This writes:
@@ -44,7 +44,7 @@ This writes:
 - `benchmarks/screening.yaml`
 - `autoharness.project.md`
 
-With `--assistant`, it also writes `autoharness.codex.md` or `autoharness.claude.md` plus `autoharness.onboarding.json`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
+With `--assistant`, it also writes `autoharness.codex.md` or `autoharness.claude.md` plus `autoharness.onboarding.json`, and `--print-next-prompt` prints the exact follow-up prompt to paste into the assistant. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
 
 If you run `guide` in a TTY, it asks a few focused setup questions and finishes with a doctor pass. Inspect `benchmarks/screening.yaml` and replace the generated command if needed.
 

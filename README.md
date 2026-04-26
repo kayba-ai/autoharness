@@ -62,12 +62,12 @@ In a TTY, `guide` asks a few setup questions. In scripts or CI, use flags like `
 If you want Codex or Claude to help you refine the setup, generate an assistant brief too:
 
 ```bash
-autoharness guide --assistant codex
+autoharness guide --assistant codex --print-next-prompt
 # or
-autoharness guide --assistant claude
+autoharness guide --assistant claude --print-next-prompt
 ```
 
-This writes `autoharness.codex.md` or `autoharness.claude.md` plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
+This writes `autoharness.codex.md` or `autoharness.claude.md` plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`, then prints a ready-to-paste assistant prompt. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
 
 `guide` ends with a doctor pass. Run `autoharness doctor` again later if you want an explicit re-check or a repeated benchmark probe.
 
@@ -99,6 +99,12 @@ Run the outer loop:
 autoharness optimize
 autoharness report
 ```
+
+## Early Results
+
+Example from one `tau2` airline benchmark study. Relative deltas are measured against the baseline harness on the same workload. Results depend on the benchmark, harness, and evaluation setup, and some intervention combinations can regress.
+
+![tau2 intervention deltas](docs/images/tau2_airline_intervention_deltas.svg)
 
 ## Docs
 

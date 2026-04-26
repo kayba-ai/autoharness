@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -113,6 +114,51 @@ def build_assistant_onboarding_packet(
             "avoid": "Do not edit application code during onboarding unless the user explicitly asks.",
         },
     }
+
+
+def build_assistant_next_prompt(
+    *,
+    assistant: str,
+    config_path: Path,
+    benchmark_config_path: Path,
+    assistant_brief_path: Path,
+    assistant_packet_path: Path,
+) -> str:
+    assistant_label = {
+        "codex": "Codex",
+        "claude": "Claude Code",
+        "generic": "your coding assistant",
+    }.get(assistant, assistant)
+    return (
+        f"You are helping finish `autoharness` onboarding for this repo in {assistant_label}.\n\n"
+        "Read these files first:\n"
+        "- docs/ONBOARDING.md\n"
+        f"- {_display_path(assistant_brief_path)}\n"
+        f"- {_display_path(assistant_packet_path)}\n"
+        f"- {_display_path(config_path)}\n"
+        f"- {_display_path(benchmark_config_path)}\n\n"
+        "Then:\n"
+        "- summarize the known facts briefly\n"
+        "- start with the highest-priority open question and doctor findings\n"
+        "- ask one or two focused questions at a time\n"
+        "- update the generated autoharness config files if needed\n"
+        "- warn about flaky, leaky, or slow benchmark setups\n"
+        "- do not edit application code unless I explicitly ask\n\n"
+        "Leave the repo ready for:\n\n"
+        "```bash\n"
+        "autoharness doctor\n"
+        "autoharness run-benchmark\n"
+        "autoharness optimize\n"
+        "autoharness report\n"
+        "```\n"
+    )
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return os.path.relpath(path, start=Path.cwd())
+    except ValueError:
+        return str(path)
 
 
 def _open_questions_from_findings(
