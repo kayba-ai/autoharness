@@ -21,6 +21,8 @@ Fastest setup with Codex or Claude:
 
 For Claude Code, swap `--assistant codex` for `--assistant claude`.
 
+Else:
+
 ```bash
 pipx install "git+https://github.com/kayba-ai/autoharness.git"
 autoharness --help
