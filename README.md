@@ -26,8 +26,7 @@ python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 ## How It Works
 
 - `guide` inspects a repo and writes a starter `autoharness.yaml` plus benchmark config.
-- `setup` defines autonomy plus editable and protected surfaces.
-- `init` creates durable state for one optimization effort.
+- `setup` and `init` remain available when you want to manage bootstrap explicitly.
 - `run-benchmark` executes one benchmark directly.
 - `generate-proposal` previews one candidate change without running it.
 - `run-iteration` or `optimize` executes one candidate or a resumable search loop.
@@ -67,13 +66,13 @@ autoharness guide --assistant claude
 
 This writes `autoharness.codex.md` or `autoharness.claude.md` next to `autoharness.yaml`. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
 
-Then bootstrap the workspace and run the benchmark:
+Then run the benchmark directly:
 
 ```bash
-autoharness setup --autonomy bounded --editable-surface src --editable-surface prompts
-autoharness init
 autoharness run-benchmark
 ```
+
+If `autoharness.yaml` is present, autoharness will auto-bootstrap missing settings and workspace state on this common path. `setup` and `init` are still available when you want explicit control.
 
 Generate a proposal against a target harness root:
 

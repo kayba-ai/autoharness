@@ -9,21 +9,17 @@ If you want a step-by-step setup guide, start with [Quickstart](quickstart.md).
 The common path looks like this:
 
 1. run `guide` to write `autoharness.yaml` and starter benchmark config
-2. configure autonomy and editable surfaces
-3. initialize a workspace
-4. confirm the benchmark runs directly
-5. generate one proposal or run one iteration
-6. run a campaign when the benchmark and proposal path are stable
-7. inspect or promote the winner
+2. confirm the benchmark runs directly
+3. generate one proposal or run one iteration
+4. run a campaign when the benchmark and proposal path are stable
+5. inspect or promote the winner
 
 ## Core Commands
 
-Guide and set up the repo once:
+Guide the repo once:
 
 ```bash
 autoharness guide
-autoharness setup
-autoharness init
 ```
 
 If you want a coding assistant to drive onboarding, generate a brief first:
@@ -35,6 +31,8 @@ autoharness guide --assistant claude
 ```
 
 This writes an assistant-specific brief next to `autoharness.yaml`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
+
+If `autoharness.yaml` is present, autoharness can auto-bootstrap missing settings and workspace state on the common path. `setup` and `init` remain available when you want to manage that bootstrap explicitly.
 
 Run the benchmark directly:
 

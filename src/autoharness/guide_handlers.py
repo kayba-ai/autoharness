@@ -176,6 +176,14 @@ def _handle_guide(args: argparse.Namespace) -> int:
         benchmark_config_path,
         start=config_path.parent,
     )
+    generator_id = "openai_responses"
+    generator_options: dict[str, object] = {"proposal_scope": "balanced"}
+    if args.assistant == "codex":
+        generator_id = "codex_cli"
+        generator_options = {"sandbox": "read-only"}
+    elif args.assistant == "claude":
+        generator_id = "claude_code"
+        generator_options = {}
 
     project_config = {
         "format_version": PROJECT_CONFIG_FORMAT_VERSION,
@@ -195,15 +203,13 @@ def _handle_guide(args: argparse.Namespace) -> int:
             "stage": "screening",
         },
         "generator": {
-            "id": "openai_responses",
+            "id": generator_id,
             "intervention_class": "source",
-            "options": {
-                "proposal_scope": "balanced",
-            },
+            "options": generator_options,
         },
         "campaign": {
             "stage": "screening",
-            "generator": "openai_responses",
+            "generator": generator_id,
             "intervention_classes": ["source"],
             "max_iterations": 10,
         },

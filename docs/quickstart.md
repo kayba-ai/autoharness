@@ -50,7 +50,9 @@ Inspect `benchmarks/screening.yaml` and replace the generated command if needed.
 
 ## 3. Choose an Autonomy Mode
 
-Write settings for the current repo:
+The generated `autoharness.yaml` already carries a default autonomy mode and editable surfaces. On the common path, autoharness can bootstrap missing settings and workspace state automatically.
+
+If you want to manage that bootstrap explicitly, run:
 
 ```bash
 autoharness setup
@@ -64,6 +66,10 @@ Modes:
 
 ## 4. Initialize a Workspace
 
+On the common path, `run-benchmark`, `optimize`, and `report` can auto-create the workspace described in `autoharness.yaml`.
+
+If you want to create it explicitly, run:
+
 ```bash
 autoharness init
 ```
@@ -76,7 +82,7 @@ This creates durable state under `.autoharness/workspaces/demo/`.
 autoharness run-benchmark
 ```
 
-Use this first to confirm your benchmark config is stable before you involve proposals or campaigns.
+Use this first to confirm your benchmark config is stable before you involve proposals or campaigns. If settings or workspace state are missing, autoharness will bootstrap them from `autoharness.yaml`.
 
 ## 6. Generate a Proposal
 

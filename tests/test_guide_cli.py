@@ -46,6 +46,8 @@ def test_guide_writes_project_config_and_benchmark_template(
     assert config_payload["workspace"]["id"] == "sample_repo"
     assert config_payload["autonomy"]["editable_surfaces"] == ["src"]
     assert config_payload["benchmark"]["adapter"] == "generic_command"
+    assert config_payload["generator"]["id"] == "openai_responses"
+    assert config_payload["campaign"]["generator"] == "openai_responses"
     assert config_payload["target_root"] == "sample_repo"
     assert benchmark_payload["command"] == ["pytest", "-q"]
     assert benchmark_payload["benchmark_name"] == "sample_repo-screening"
@@ -126,29 +128,6 @@ def test_project_config_defaults_cover_common_path_commands(
         encoding="utf-8",
     )
 
-    assert (
-        main(
-            [
-                "--project-config",
-                str(project_config_path),
-                "setup",
-            ]
-        )
-        == 0
-    )
-    assert (project_root / ".autoharness" / "settings.yaml").exists()
-
-    assert (
-        main(
-            [
-                "--project-config",
-                str(project_config_path),
-                "init",
-            ]
-        )
-        == 0
-    )
-
     capsys.readouterr()
     assert (
         main(
@@ -167,6 +146,14 @@ def test_project_config_defaults_cover_common_path_commands(
         (project_root / "benchmark_result.json").read_text(encoding="utf-8")
     )
     assert benchmark_payload["benchmark_name"] == "project-screening"
+    assert (project_root / ".autoharness" / "settings.yaml").exists()
+    assert (
+        project_root
+        / ".autoharness"
+        / "workspaces"
+        / "demo"
+        / "workspace.json"
+    ).exists()
 
     capsys.readouterr()
     assert (
@@ -236,9 +223,13 @@ def test_guide_writes_assistant_brief_when_requested(
 
     brief_path = tmp_path / "autoharness.codex.md"
     brief_text = brief_path.read_text(encoding="utf-8")
+    config_payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
     assert "Autoharness Assistant Brief" in brief_text
     assert "Codex" in brief_text
     assert "docs/ONBOARDING.md" in brief_text
     assert "autoharness optimize" in brief_text
+    assert config_payload["generator"]["id"] == "codex_cli"
+    assert config_payload["generator"]["options"] == {"sandbox": "read-only"}
+    assert config_payload["campaign"]["generator"] == "codex_cli"
     assert f"Wrote assistant brief: {brief_path}" in capsys.readouterr().out

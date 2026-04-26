@@ -20,11 +20,12 @@ _TOP_LEVEL_DESCRIPTION = (
 
 _TOP_LEVEL_EPILOG = """Common path:
   autoharness guide
-  autoharness setup
-  autoharness init
   autoharness run-benchmark
   autoharness optimize
   autoharness report
+
+If `autoharness.yaml` is present, autoharness can auto-bootstrap missing setup
+and workspace state on the common path.
 
 Power-user surfaces remain available for background workers, root coordination,
 retention, bundles, and inspection commands.

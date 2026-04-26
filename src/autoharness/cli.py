@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from .cli_parser import build_parser
-from .project_config import apply_project_defaults
+from .project_config import apply_project_defaults, maybe_bootstrap_project_state
 from .execution_handlers import (
     _load_iteration_plan,
     _planned_iteration_argv,
@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         raw_argv=raw_argv,
         cwd=Path.cwd(),
     )
+    args = maybe_bootstrap_project_state(args=args)
     return args.handler(args)
 
 

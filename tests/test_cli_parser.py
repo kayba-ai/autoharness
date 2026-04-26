@@ -27,9 +27,10 @@ def test_build_parser_top_level_help_surfaces_common_path() -> None:
     assert "Optimize an existing harness repo" in help_text
     assert "Common path:" in help_text
     assert "autoharness guide" in help_text
-    assert "autoharness init" in help_text
+    assert "autoharness run-benchmark" in help_text
     assert "autoharness optimize" in help_text
     assert "autoharness report" in help_text
+    assert "auto-bootstrap missing setup" in help_text
 
 
 def test_build_parser_parses_global_project_config_and_guide_command() -> None:
