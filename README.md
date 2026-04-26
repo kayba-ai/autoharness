@@ -12,6 +12,15 @@ It is a control plane for an existing harness repo. You point it at a target roo
 
 ## Install
 
+Fastest setup with Codex or Claude:
+
+1. `pipx install "git+https://github.com/kayba-ai/autoharness.git"`
+2. `cd` into your harness repo
+3. open Codex or Claude Code in that repo
+4. tell the assistant: `Run autoharness guide --assistant codex --print-next-prompt, then use the generated onboarding packet to finish setup.`
+
+For Claude Code, swap `--assistant codex` for `--assistant claude`.
+
 ```bash
 pipx install "git+https://github.com/kayba-ai/autoharness.git"
 autoharness --help
@@ -22,15 +31,6 @@ If you do not use `pipx`:
 ```bash
 python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 ```
-
-Fastest setup with Codex or Claude:
-
-1. `pipx install "git+https://github.com/kayba-ai/autoharness.git"`
-2. `cd` into your harness repo
-3. open Codex or Claude Code in that repo
-4. tell the assistant: `Run autoharness guide --assistant codex --print-next-prompt, then use the generated onboarding packet to finish setup.`
-
-For Claude Code, swap `--assistant codex` for `--assistant claude`.
 
 ## How It Works
 
