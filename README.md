@@ -25,7 +25,8 @@ python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 
 ## How It Works
 
-- `guide` inspects a repo and writes a starter `autoharness.yaml` plus benchmark config.
+- `guide` inspects a repo, asks a few focused setup questions in a TTY, writes a starter `autoharness.yaml` plus benchmark config, and runs a readiness check.
+- `doctor` reruns config, generator, and benchmark validation when you want an explicit readiness gate.
 - `setup` and `init` remain available when you want to manage bootstrap explicitly.
 - `run-benchmark` executes one benchmark directly.
 - `generate-proposal` previews one candidate change without running it.
@@ -64,7 +65,9 @@ autoharness guide --assistant codex
 autoharness guide --assistant claude
 ```
 
-This writes `autoharness.codex.md` or `autoharness.claude.md` next to `autoharness.yaml`. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
+This writes `autoharness.codex.md` or `autoharness.claude.md` plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
+
+`guide` ends with a doctor pass. Run `autoharness doctor` again later if you want an explicit re-check or a repeated benchmark probe.
 
 Then run the benchmark directly:
 
@@ -77,8 +80,13 @@ If `autoharness.yaml` is present, autoharness will auto-bootstrap missing settin
 Generate a proposal against a target harness root:
 
 ```bash
-export OPENAI_API_KEY=...
 autoharness generate-proposal
+```
+
+If you switch the project config to `openai_responses`, export an API key first:
+
+```bash
+export OPENAI_API_KEY=...
 ```
 
 Run the outer loop:

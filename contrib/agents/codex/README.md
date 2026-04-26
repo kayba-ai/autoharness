@@ -6,12 +6,13 @@ Generate a Codex-specific onboarding brief:
 autoharness guide --assistant codex
 ```
 
-That writes `autoharness.codex.md` next to `autoharness.yaml` unless you override `--assistant-brief-path`.
+That writes `autoharness.codex.md` and `autoharness.onboarding.json` next to `autoharness.yaml` unless you override the assistant output paths.
 
 In Codex, point the agent at:
 
 - `docs/ONBOARDING.md`
 - `autoharness.codex.md`
+- `autoharness.onboarding.json`
 - `autoharness.yaml`
 - `benchmarks/screening.yaml`
 

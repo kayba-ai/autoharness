@@ -250,6 +250,7 @@ def apply_project_defaults(
         )
 
     if command in {
+        "doctor",
         "run-benchmark",
         "generate-proposal",
         "run-iteration",
@@ -290,7 +291,7 @@ def apply_project_defaults(
             flags=("--stage",),
         )
 
-    if command in {"generate-proposal", "run-campaign", "optimize"}:
+    if command in {"doctor", "generate-proposal", "run-campaign", "optimize"}:
         _set_scalar_default(
             args,
             field_name="stage",

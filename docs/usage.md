@@ -30,9 +30,11 @@ autoharness guide --assistant codex
 autoharness guide --assistant claude
 ```
 
-This writes an assistant-specific brief next to `autoharness.yaml`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
+This writes an assistant-specific brief plus a structured `autoharness.onboarding.json` handoff next to `autoharness.yaml`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
 
 If `autoharness.yaml` is present, autoharness can auto-bootstrap missing settings and workspace state on the common path. `setup` and `init` remain available when you want to manage that bootstrap explicitly.
+
+`guide` already runs a doctor pass after it writes the starter files. Run `autoharness doctor` later when you want an explicit readiness check or a repeated benchmark probe.
 
 Run the benchmark directly:
 
@@ -96,6 +98,7 @@ autoharness promote-from-compare \
 ## When To Use What
 
 - Use `run-benchmark` first when validating the benchmark config.
+- Use `doctor` when you want an explicit readiness gate for broken config, missing generator auth, or flaky benchmarks.
 - Use `generate-proposal` when you want to inspect candidate edits before execution.
 - Use `run-iteration` when you want one executed candidate.
 - Use `optimize` when you want a resumable search loop.

@@ -264,3 +264,105 @@ def test_apply_edit_plan_rejects_path_escape(tmp_path: Path) -> None:
         assert "escapes target root" in str(exc)
     else:
         raise AssertionError("Expected ValueError for path escape")
+
+
+def test_apply_edit_plan_supports_delete_file_in_v2(tmp_path: Path) -> None:
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    file_path = target_root / "src" / "obsolete.py"
+    file_path.parent.mkdir(parents=True)
+    file_path.write_text("print('old')\n", encoding="utf-8")
+
+    plan = edit_plan_from_dict(
+        {
+            "format_version": "autoharness.edit_plan.v2",
+            "operations": [
+                {
+                    "type": "delete_file",
+                    "path": "src/obsolete.py",
+                }
+            ],
+        }
+    )
+
+    session = start_edit_session(
+        plan=plan,
+        target_root=target_root,
+        policy=policy_for_mode("full"),
+    )
+
+    assert session.application.status == "applied"
+    assert file_path.exists() is False
+    restore = session.finalize()
+    assert restore.status == "reverted"
+    assert file_path.read_text(encoding="utf-8") == "print('old')\n"
+
+
+def test_apply_edit_plan_supports_move_path_in_v2(tmp_path: Path) -> None:
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    source_path = target_root / "src" / "old_name.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("VALUE = 1\n", encoding="utf-8")
+
+    plan = edit_plan_from_dict(
+        {
+            "format_version": "autoharness.edit_plan.v2",
+            "operations": [
+                {
+                    "type": "move_path",
+                    "path": "src/old_name.py",
+                    "dest_path": "src/new_name.py",
+                }
+            ],
+        }
+    )
+
+    session = start_edit_session(
+        plan=plan,
+        target_root=target_root,
+        policy=policy_for_mode("full"),
+    )
+
+    assert session.application.status == "applied"
+    assert source_path.exists() is False
+    assert (target_root / "src" / "new_name.py").read_text(encoding="utf-8") == "VALUE = 1\n"
+    session.finalize()
+    assert source_path.read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert (target_root / "src" / "new_name.py").exists() is False
+
+
+def test_apply_edit_plan_supports_unified_diff_in_v2(tmp_path: Path) -> None:
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    file_path = target_root / "src" / "agent.py"
+    file_path.parent.mkdir(parents=True)
+    file_path.write_text("MODE = 'old'\n", encoding="utf-8")
+
+    plan = edit_plan_from_dict(
+        {
+            "format_version": "autoharness.edit_plan.v2",
+            "operations": [
+                {
+                    "type": "unified_diff",
+                    "path": "src/agent.py",
+                    "diff": (
+                        "--- a/src/agent.py\n"
+                        "+++ b/src/agent.py\n"
+                        "@@ -1 +1 @@\n"
+                        "-MODE = 'old'\n"
+                        "+MODE = 'new'\n"
+                    ),
+                }
+            ],
+        }
+    )
+
+    result = apply_edit_plan(
+        plan=plan,
+        target_root=target_root,
+        policy=policy_for_mode("full"),
+    )
+
+    assert result.status == "applied"
+    assert file_path.read_text(encoding="utf-8") == "MODE = 'new'\n"

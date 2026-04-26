@@ -27,6 +27,7 @@ def test_build_parser_top_level_help_surfaces_common_path() -> None:
     assert "Optimize an existing harness repo" in help_text
     assert "Common path:" in help_text
     assert "autoharness guide" in help_text
+    assert "autoharness doctor" in help_text
     assert "autoharness run-benchmark" in help_text
     assert "autoharness optimize" in help_text
     assert "autoharness report" in help_text
@@ -47,6 +48,8 @@ def test_build_parser_parses_global_project_config_and_guide_command() -> None:
             "codex",
             "--assistant-brief-path",
             "autoharness.codex.md",
+            "--assistant-packet-path",
+            "autoharness.onboarding.json",
         ]
     )
 
@@ -55,6 +58,58 @@ def test_build_parser_parses_global_project_config_and_guide_command() -> None:
     assert args.target_root == Path("repo")
     assert args.assistant == "codex"
     assert args.assistant_brief_path == Path("autoharness.codex.md")
+    assert args.assistant_packet_path == Path("autoharness.onboarding.json")
+
+
+def test_build_parser_parses_interactive_guide_overrides() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    args = parser.parse_args(
+        [
+            "guide",
+            "--benchmark-command",
+            "python -m pytest -q",
+            "--editable-surface",
+            "src",
+            "--editable-surface",
+            "prompts",
+            "--generator",
+            "failure_summary",
+            "--autonomy",
+            "proposal",
+            "--non-interactive",
+            "--run-benchmark-probe",
+        ]
+    )
+
+    assert args.command == "guide"
+    assert args.benchmark_command == "python -m pytest -q"
+    assert args.editable_surface == ["src", "prompts"]
+    assert args.generator == "failure_summary"
+    assert args.autonomy == "proposal"
+    assert args.non_interactive is True
+    assert args.run_benchmark_probe is True
+
+
+def test_build_parser_parses_doctor_command() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    args = parser.parse_args(
+        [
+            "doctor",
+            "--config",
+            "benchmark.yaml",
+            "--generator",
+            "failure_summary",
+            "--repeat",
+            "5",
+        ]
+    )
+
+    assert args.command == "doctor"
+    assert args.config == Path("benchmark.yaml")
+    assert args.generator == "failure_summary"
+    assert args.repeat == 5
 
 
 def test_build_parser_parses_show_plan_file_arguments() -> None:

@@ -10,6 +10,7 @@ The onboarding flow should aim to produce:
 
 - `autoharness.yaml`
 - `benchmarks/screening.yaml`
+- `autoharness.onboarding.json` when an assistant handoff is needed
 - optionally `benchmarks/promotion.yaml`
 - optionally `autoharness.project.md`
 
@@ -22,6 +23,7 @@ The assistant should:
 3. prefer the smallest useful setup over a theoretically complete one
 4. warn about flaky or leaky benchmarks
 5. avoid editing application code during onboarding unless explicitly asked
+6. aim to finish by writing the starter files and validating them with a doctor-style readiness pass
 
 ## Information To Gather
 
@@ -57,8 +59,7 @@ The assistant should warn when:
 A successful onboarding flow should leave the user able to run:
 
 ```bash
-autoharness setup
-autoharness init
+autoharness doctor
 autoharness run-benchmark
 autoharness optimize
 autoharness report
@@ -71,5 +72,7 @@ without requiring a long explanation of tracks, roots, leases, bundles, or plugi
 Codex, Claude Code, and similar assistants should treat this document as the source of truth for setup behavior.
 
 Assistant-specific wrappers may add convenience, but they should not redefine the product model.
+
+When `guide --assistant ...` is used, the generated `autoharness.onboarding.json` file should be treated as the assistant handoff packet. It contains known facts, doctor findings, open questions, and the recommended next action.
 
 Checked-in wrapper prompts live under `contrib/agents/`.

@@ -44,9 +44,9 @@ This writes:
 - `benchmarks/screening.yaml`
 - `autoharness.project.md`
 
-With `--assistant`, it also writes `autoharness.codex.md` or `autoharness.claude.md`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
+With `--assistant`, it also writes `autoharness.codex.md` or `autoharness.claude.md` plus `autoharness.onboarding.json`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
 
-Inspect `benchmarks/screening.yaml` and replace the generated command if needed.
+If you run `guide` in a TTY, it asks a few focused setup questions and finishes with a doctor pass. Inspect `benchmarks/screening.yaml` and replace the generated command if needed.
 
 ## 3. Choose an Autonomy Mode
 
@@ -63,6 +63,12 @@ Modes:
 - `proposal`: draft proposals only
 - `bounded`: apply changes only inside approved editable surfaces
 - `full`: edit broadly except for protected surfaces
+
+If you want to rerun the readiness checks later, use:
+
+```bash
+autoharness doctor
+```
 
 ## 4. Initialize a Workspace
 
@@ -96,11 +102,16 @@ autoharness show-generator --generator openai_responses
 Then generate one proposal against a target harness root:
 
 ```bash
-export OPENAI_API_KEY=...
 autoharness generate-proposal
 ```
 
 This persists a proposal artifact without executing the benchmark.
+
+If you want to use the OpenAI-backed generator specifically, export an API key first:
+
+```bash
+export OPENAI_API_KEY=...
+```
 
 If you want to use a local coding assistant instead of the OpenAI-backed generator, use:
 

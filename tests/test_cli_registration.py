@@ -8,6 +8,7 @@ from autoharness.benchmark_handlers import (
     _handle_show_benchmark_config,
     _handle_validate_benchmark_config,
 )
+from autoharness.doctor_handlers import _handle_doctor
 from autoharness.guide_handlers import _handle_guide
 from autoharness.inspection_handlers import (
     _handle_export_root_bundle,
@@ -128,6 +129,9 @@ def test_register_command_parsers_wires_guide_command() -> None:
             "repo",
             "--assistant",
             "claude",
+            "--generator",
+            "failure_summary",
+            "--non-interactive",
         ]
     )
 
@@ -135,6 +139,27 @@ def test_register_command_parsers_wires_guide_command() -> None:
     assert args.handler is _handle_guide
     assert args.target_root == Path("repo")
     assert args.assistant == "claude"
+    assert args.generator == "failure_summary"
+    assert args.non_interactive is True
+
+
+def test_register_command_parsers_wires_doctor_command() -> None:
+    parser = _build_registered_parser()
+
+    args = parser.parse_args(
+        [
+            "doctor",
+            "--config",
+            "benchmark.yaml",
+            "--generator",
+            "failure_summary",
+        ]
+    )
+
+    assert args.command == "doctor"
+    assert args.handler is _handle_doctor
+    assert args.config == Path("benchmark.yaml")
+    assert args.generator == "failure_summary"
 
 
 def test_register_command_parsers_wires_init_and_report_aliases() -> None:

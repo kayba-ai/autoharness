@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .cli_registration_benchmarks import register_benchmark_parsers
 from .cli_registration_campaigns import register_campaign_parsers
+from .cli_registration_doctor import register_doctor_parsers
 from .cli_registration_execution import register_execution_parsers
 from .cli_registration_guide import register_guide_parsers
 from .cli_registration_inspection import register_inspection_parsers
@@ -19,6 +20,7 @@ def register_command_parsers(
     run_planned_iteration_handler,
 ) -> None:
     register_guide_parsers(subparsers)
+    register_doctor_parsers(subparsers)
     register_workspace_parsers(subparsers)
     register_benchmark_parsers(subparsers)
     register_execution_parsers(

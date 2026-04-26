@@ -20,6 +20,7 @@ _TOP_LEVEL_DESCRIPTION = (
 
 _TOP_LEVEL_EPILOG = """Common path:
   autoharness guide
+  autoharness doctor
   autoharness run-benchmark
   autoharness optimize
   autoharness report

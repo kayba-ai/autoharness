@@ -501,12 +501,12 @@ def _proposal_instructions(*, proposal_scope: str, max_operations: int) -> str:
         "You generate one AUTOHARNESS proposal as JSON. "
         "Return only JSON. "
         "The JSON must contain: hypothesis, summary, intervention_class, operations. "
-        "Use only supported operation types: write_file and search_replace. "
+        "Use only supported operation types: write_file, search_replace, delete_file, move_path, and unified_diff. "
         "Paths must stay relative to the target root. "
         "Every operation must support one coherent hypothesis rather than unrelated cleanup. "
         "Do not invent files outside the target root. "
         "When modifying an existing file, prefer search_replace with a precise search string. "
-        "When creating a new file, use write_file. "
+        "When creating a new file, use write_file. Use unified_diff when a hunk-style patch is clearer than search_replace. "
         "If you cannot express the patch as operations, you may return a files mapping "
         "from relative path to file content and autoharness will repair it. "
         "The summary should be short and specific."
@@ -539,7 +539,7 @@ def _repair_instructions(*, proposal_scope: str, max_operations: int) -> str:
         "You are repairing a previously invalid AUTOHARNESS proposal response. "
         "Return only valid JSON. "
         "The JSON must contain: hypothesis, summary, intervention_class, operations. "
-        "Use only supported operation types: write_file and search_replace. "
+        "Use only supported operation types: write_file, search_replace, delete_file, move_path, and unified_diff. "
         "Paths must stay relative to the target root. "
         "Preserve the original proposal intent where possible, but fix invalid structure, "
         "missing required fields, and malformed operations. "
@@ -583,7 +583,13 @@ def _build_repair_prompt_payload(
                 "intervention_class",
                 "operations",
             ],
-            "supported_operation_types": ["write_file", "search_replace"],
+            "supported_operation_types": [
+                "write_file",
+                "search_replace",
+                "delete_file",
+                "move_path",
+                "unified_diff",
+            ],
         },
     }
 

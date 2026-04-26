@@ -365,7 +365,7 @@ def _assistant_prompt_text(
         f"- Do not apply edits.\n"
         f"- Return exactly one JSON object and nothing else.\n\n"
         f"Output requirements:\n"
-        f"- Use only `search_replace` and `write_file` operations.\n"
+        f"- Use only supported operation types: `search_replace`, `write_file`, `delete_file`, `move_path`, and `unified_diff`.\n"
         f"- Paths must be relative to the target repo root.\n"
         f"- Keep the proposal bounded but allow multiple files when they support one hypothesis.\n"
         f"- Prefer harness-side changes over broad unrelated rewrites.\n"

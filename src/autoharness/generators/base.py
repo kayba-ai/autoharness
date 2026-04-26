@@ -154,7 +154,9 @@ def normalize_generated_payload(
 
     edit_plan = edit_plan_from_dict(
         {
-            "format_version": "autoharness.edit_plan.v1",
+            "format_version": str(
+                normalized.get("format_version", "autoharness.edit_plan.v1")
+            ),
             "summary": str(normalized.get("summary", "")),
             "operations": normalized.get("operations"),
         }
@@ -170,7 +172,7 @@ def normalized_edit_plan_from_payload(payload: dict[str, Any]) -> EditPlan:
         return edit_plan
     return edit_plan_from_dict(
         {
-            "format_version": "autoharness.edit_plan.v1",
+            "format_version": str(payload.get("format_version", "autoharness.edit_plan.v1")),
             "summary": str(payload.get("summary", "")),
             "operations": payload.get("operations"),
         }
