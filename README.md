@@ -4,7 +4,7 @@
 
 # autoharness
 
-Let autoharness run overnight and come back to an optimized agent harness, so your agents never make mistakes again.
+Let autoharness run overnight and come back to an optimized agent harness, so your production agents never make mistakes again.
 
 autoharness improves agent harnesses by proposing or applying prompt, config, middleware, and source changes, running evals, and keeping or discarding candidates based on benchmark results.
 
