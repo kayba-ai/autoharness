@@ -21,12 +21,12 @@
     <text x="585" y="160" text-anchor="end" font-size="28">Best-of-N skillbook scoring</text>
     <text x="585" y="330" text-anchor="end" font-size="28">Tighten reflector hyperparameters</text>
     <text x="585" y="500" text-anchor="end" font-size="28">Runtime context injection</text>
-    <text x="585" y="670" text-anchor="end" font-size="28">Context injection + skillbook scoring</text>
-
     <rect x="600" y="110" width="679" height="100" fill="#2fa786" opacity="0.97" />
     <rect x="600" y="280" width="401" height="100" fill="#2fa786" opacity="0.97" />
     <rect x="600" y="450" width="370" height="100" fill="#2fa786" opacity="0.97" />
     <rect x="167" y="620" width="433" height="100" fill="#e53e3e" opacity="0.98" />
+
+    <text x="615" y="676" text-anchor="start" font-size="28">Context injection + skillbook scoring</text>
 
     <text x="1257" y="166" text-anchor="end" font-size="28" font-weight="700">+40.7%</text>
     <text x="980" y="336" text-anchor="end" font-size="28" font-weight="700">+24.1%</text>

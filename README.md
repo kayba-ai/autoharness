@@ -23,6 +23,15 @@ If you do not use `pipx`:
 python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 ```
 
+Fastest setup with Codex or Claude:
+
+1. `pipx install "git+https://github.com/kayba-ai/autoharness.git"`
+2. `cd` into your harness repo
+3. open Codex or Claude Code in that repo
+4. tell the assistant: `Run autoharness guide --assistant codex --print-next-prompt, then use the generated onboarding packet to finish setup.`
+
+For Claude Code, swap `--assistant codex` for `--assistant claude`.
+
 ## How It Works
 
 - `guide` inspects a repo, asks a few focused setup questions in a TTY, stays scriptable with flags in non-interactive use, writes a starter `autoharness.yaml` plus benchmark config, and runs a readiness check.
