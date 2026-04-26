@@ -71,6 +71,7 @@ def register_execution_parsers(
     _add_required_adapter_argument(
         run_benchmark,
         help_text="Adapter id to execute.",
+        required=False,
     )
     _add_config_composition_arguments(
         run_benchmark,
@@ -293,7 +294,7 @@ def register_execution_parsers(
         help="Run exactly one hypothesis inside an existing workspace and record it.",
     )
     _add_optional_workspace_id_argument(run_iteration)
-    _add_required_adapter_argument(run_iteration)
+    _add_required_adapter_argument(run_iteration, required=False)
     _add_config_composition_arguments(
         run_iteration,
         preset_help=(

@@ -15,6 +15,10 @@ from .base import (
     ProposalGenerationTimeoutError,
     ProposalGenerator,
 )
+from .assistant_cli_generator import (
+    ClaudeCodeProposalGenerator,
+    CodexCLIProposalGenerator,
+)
 from .failure_driven_generator import FailureDrivenWriteFileGenerator
 from .local_command_generator import LocalCommandProposalGenerator
 from .manual_generator import ManualEditPlanGenerator
@@ -23,6 +27,8 @@ from .template_generator import LocalTemplateProposalGenerator
 
 
 _GENERATORS = {
+    "claude_code": ClaudeCodeProposalGenerator(),
+    "codex_cli": CodexCLIProposalGenerator(),
     "failure_summary": FailureDrivenWriteFileGenerator(),
     "local_command": LocalCommandProposalGenerator(),
     "local_template": LocalTemplateProposalGenerator(),
@@ -31,6 +37,54 @@ _GENERATORS = {
 }
 
 _GENERATOR_CATALOG = {
+    "claude_code": {
+        "label": "Claude Code",
+        "kind": "local_assistant_cli",
+        "description": (
+            "Calls the local Claude Code CLI in print mode with proposal-generation "
+            "context and expects one JSON edit plan response."
+        ),
+        "requires_edit_plan_input": False,
+        "can_generate_without_edit_plan": True,
+        "accepts_intervention_class": True,
+        "generator_option_keys": [
+            "command_path",
+            "model",
+            "effort",
+            "permission_mode",
+            "timeout_seconds",
+            "fallback_generators",
+        ],
+        "environment_variables": [],
+        "notes": (
+            "Requires a local Claude Code CLI with auth already configured. "
+            "Runs as a proposal-only generator and does not apply edits."
+        ),
+    },
+    "codex_cli": {
+        "label": "Codex CLI",
+        "kind": "local_assistant_cli",
+        "description": (
+            "Calls the local Codex CLI in non-interactive exec mode with proposal-generation "
+            "context and expects one JSON edit plan response."
+        ),
+        "requires_edit_plan_input": False,
+        "can_generate_without_edit_plan": True,
+        "accepts_intervention_class": True,
+        "generator_option_keys": [
+            "command_path",
+            "model",
+            "profile",
+            "sandbox",
+            "timeout_seconds",
+            "fallback_generators",
+        ],
+        "environment_variables": [],
+        "notes": (
+            "Requires a local Codex CLI with auth already configured. "
+            "Defaults to read-only sandboxing for proposal generation."
+        ),
+    },
     "failure_summary": {
         "label": "Failure Summary",
         "kind": "deterministic",

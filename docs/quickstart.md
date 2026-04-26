@@ -22,24 +22,38 @@ Verify the CLI is available:
 autoharness --help
 ```
 
-## 2. Write a Benchmark Config
+## 2. Run The Guide
 
-Create `benchmark.yaml`:
+Ask autoharness to inspect the repo and write starter files:
 
-```yaml
-benchmark_name: smoke
-workdir: .
-command: ["python", "-c", "print('ok')"]
+```bash
+autoharness guide
 ```
 
-This is the smallest useful `generic_command` benchmark. Replace the command with your real harness eval entrypoint.
+If you want Codex or Claude to help refine the setup, generate an assistant brief too:
+
+```bash
+autoharness guide --assistant codex
+# or
+autoharness guide --assistant claude
+```
+
+This writes:
+
+- `autoharness.yaml`
+- `benchmarks/screening.yaml`
+- `autoharness.project.md`
+
+With `--assistant`, it also writes `autoharness.codex.md` or `autoharness.claude.md`. Wrapper prompts live under [`contrib/agents/`](../contrib/agents/README.md).
+
+Inspect `benchmarks/screening.yaml` and replace the generated command if needed.
 
 ## 3. Choose an Autonomy Mode
 
 Write settings for the current repo:
 
 ```bash
-autoharness setup --autonomy bounded --editable-surface src --editable-surface prompts
+autoharness setup
 ```
 
 Modes:
@@ -51,10 +65,7 @@ Modes:
 ## 4. Initialize a Workspace
 
 ```bash
-autoharness init \
-  --workspace-id demo \
-  --objective "Improve pass rate without regressions" \
-  --benchmark generic-smoke
+autoharness init
 ```
 
 This creates durable state under `.autoharness/workspaces/demo/`.
@@ -62,10 +73,7 @@ This creates durable state under `.autoharness/workspaces/demo/`.
 ## 5. Run the Benchmark Directly
 
 ```bash
-autoharness run-benchmark \
-  --adapter generic_command \
-  --config benchmark.yaml \
-  --stage screening
+autoharness run-benchmark
 ```
 
 Use this first to confirm your benchmark config is stable before you involve proposals or campaigns.
@@ -83,33 +91,24 @@ Then generate one proposal against a target harness root:
 
 ```bash
 export OPENAI_API_KEY=...
-autoharness generate-proposal \
-  --workspace-id demo \
-  --adapter generic_command \
-  --config benchmark.yaml \
-  --generator openai_responses \
-  --intervention-class source \
-  --generator-option proposal_scope=balanced \
-  --target-root /path/to/harness \
-  --stage screening
+autoharness generate-proposal
 ```
 
 This persists a proposal artifact without executing the benchmark.
+
+If you want to use a local coding assistant instead of the OpenAI-backed generator, use:
+
+```bash
+autoharness show-generator --generator codex_cli
+autoharness show-generator --generator claude_code
+```
 
 ## 7. Run a Campaign
 
 For a generator-driven outer loop:
 
 ```bash
-autoharness optimize \
-  --workspace-id demo \
-  --adapter generic_command \
-  --config benchmark.yaml \
-  --generator openai_responses \
-  --intervention-class source \
-  --target-root /path/to/harness \
-  --stage screening \
-  --max-iterations 10
+autoharness optimize
 ```
 
 This uses proposal generation plus benchmark execution to run a resumable search loop.
@@ -117,7 +116,7 @@ This uses proposal generation plus benchmark execution to run a resumable search
 Inspect the current workspace summary at any point with:
 
 ```bash
-autoharness report --workspace-id demo
+autoharness report
 ```
 
 ## 8. Know Where State Lives

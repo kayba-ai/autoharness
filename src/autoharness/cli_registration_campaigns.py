@@ -559,7 +559,7 @@ def register_campaign_parsers(subparsers) -> None:
     _add_optional_workspace_id_argument(run_campaign)
     _add_optional_track_selection_argument(run_campaign)
     _add_workspace_root_argument(run_campaign)
-    _add_required_adapter_argument(run_campaign)
+    _add_required_adapter_argument(run_campaign, required=False)
     _add_config_composition_arguments(
         run_campaign,
         preset_help=(

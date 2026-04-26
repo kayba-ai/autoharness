@@ -292,6 +292,8 @@ def test_list_and_show_generators(tmp_path: Path, capsys) -> None:
     assert json.loads(output_path.read_text(encoding="utf-8")) == rendered
     generator_ids = {item["generator_id"] for item in rendered["generators"]}
     assert generator_ids == {
+        "claude_code",
+        "codex_cli",
         "failure_summary",
         "local_command",
         "local_template",
@@ -348,6 +350,29 @@ def test_list_and_show_generators(tmp_path: Path, capsys) -> None:
         "proposal_scope",
         "max_operations",
         "max_repair_attempts",
+        "fallback_generators",
+    ]
+
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "show-generator",
+                "--generator",
+                "codex_cli",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    generator_rendered = json.loads(capsys.readouterr().out)
+    assert generator_rendered["generator_id"] == "codex_cli"
+    assert generator_rendered["generator_option_keys"] == [
+        "command_path",
+        "model",
+        "profile",
+        "sandbox",
+        "timeout_seconds",
         "fallback_generators",
     ]
 

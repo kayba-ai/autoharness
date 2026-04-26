@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .cli_parser import build_parser
+from .project_config import apply_project_defaults
 from .execution_handlers import (
     _load_iteration_plan,
     _planned_iteration_argv,
@@ -16,6 +17,12 @@ from .execution_handlers import (
 def _handle_run_planned_iteration(args: argparse.Namespace) -> int:
     plan = _load_iteration_plan(args.plan)
     planned_argv = _planned_iteration_argv(plan)
+    if getattr(args, "project_config", None) is not None:
+        planned_argv = [
+            "--project-config",
+            str(Path(args.project_config)),
+            *planned_argv,
+        ]
     planned_argv.extend(["--source-plan-path", str(args.plan.resolve())])
     planning_cwd = _planned_iteration_cwd(plan, plan_path=args.plan)
     if planning_cwd is None:
@@ -28,10 +35,16 @@ def _handle_run_planned_iteration(args: argparse.Namespace) -> int:
     finally:
         os.chdir(original_cwd)
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
     parser = build_parser(
         run_planned_iteration_handler=_handle_run_planned_iteration,
     )
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
+    args = apply_project_defaults(
+        args=args,
+        raw_argv=raw_argv,
+        cwd=Path.cwd(),
+    )
     return args.handler(args)
 
 

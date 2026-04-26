@@ -479,9 +479,13 @@ def register_workspace_parsers(subparsers) -> None:
         aliases=["init"],
         help="Create a new workspace skeleton for one optimization effort.",
     )
-    _add_workspace_id_argument(init_workspace)
-    _add_objective_argument(init_workspace, required=True)
-    _add_benchmark_argument(init_workspace, required=True)
+    init_workspace.add_argument(
+        "--workspace-id",
+        default=None,
+        help="Workspace id. Optional when provided by autoharness project config.",
+    )
+    _add_objective_argument(init_workspace, required=False)
+    _add_benchmark_argument(init_workspace, required=False)
     _add_domain_argument(
         init_workspace,
         default="general",

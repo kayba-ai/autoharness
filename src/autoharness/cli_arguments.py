@@ -550,8 +550,15 @@ def _add_required_adapter_argument(
     parser: argparse.ArgumentParser,
     *,
     help_text: str | None = None,
+    required: bool = True,
 ) -> None:
-    _add_argument_specs(parser, [_required_adapter_argument_spec(help_text)])
+    if required:
+        _add_argument_specs(parser, [_required_adapter_argument_spec(help_text)])
+        return
+    kwargs: dict[str, object] = {"default": None}
+    if help_text is not None:
+        kwargs["help"] = help_text
+    parser.add_argument("--adapter", **kwargs)
 
 
 def _add_optional_track_selection_argument(parser: argparse.ArgumentParser) -> None:

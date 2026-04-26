@@ -223,6 +223,10 @@ def _handle_generate_proposal(args: argparse.Namespace) -> int:
         root=args.root,
         requested_workspace_id=args.workspace_id,
     )
+    if not isinstance(args.adapter, str) or not args.adapter.strip():
+        raise SystemExit(
+            "`--adapter` is required unless provided by autoharness project config."
+        )
     workspace, state, track_id = _resolve_workspace_track(
         root=args.root,
         workspace_id=args.workspace_id,

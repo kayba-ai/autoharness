@@ -1055,6 +1055,18 @@ def _handle_set_track(args: argparse.Namespace) -> int:
 
 
 def _handle_init_workspace(args: argparse.Namespace) -> int:
+    if not isinstance(args.workspace_id, str) or not args.workspace_id.strip():
+        raise SystemExit(
+            "`--workspace-id` is required unless provided by autoharness project config."
+        )
+    if not isinstance(args.objective, str) or not args.objective.strip():
+        raise SystemExit(
+            "`--objective` is required unless provided by autoharness project config."
+        )
+    if not isinstance(args.benchmark, str) or not args.benchmark.strip():
+        raise SystemExit(
+            "`--benchmark` is required unless provided by autoharness project config."
+        )
     settings = _load_settings(args.settings)
     workspace_root = args.root / args.workspace_id
 

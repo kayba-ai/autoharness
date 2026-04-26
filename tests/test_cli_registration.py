@@ -8,6 +8,7 @@ from autoharness.benchmark_handlers import (
     _handle_show_benchmark_config,
     _handle_validate_benchmark_config,
 )
+from autoharness.guide_handlers import _handle_guide
 from autoharness.inspection_handlers import (
     _handle_export_root_bundle,
     _handle_export_root_champion_report,
@@ -117,24 +118,34 @@ def test_register_command_parsers_wires_run_planned_iteration_handler() -> None:
     assert args.plan == Path("saved-plan.json")
 
 
+def test_register_command_parsers_wires_guide_command() -> None:
+    parser = _build_registered_parser()
+
+    args = parser.parse_args(
+        [
+            "guide",
+            "--target-root",
+            "repo",
+            "--assistant",
+            "claude",
+        ]
+    )
+
+    assert args.command == "guide"
+    assert args.handler is _handle_guide
+    assert args.target_root == Path("repo")
+    assert args.assistant == "claude"
+
+
 def test_register_command_parsers_wires_init_and_report_aliases() -> None:
     parser = _build_registered_parser()
 
-    init_args = parser.parse_args(
-        [
-            "init",
-            "--workspace-id",
-            "demo",
-            "--objective",
-            "Improve pass rate",
-            "--benchmark",
-            "generic-smoke",
-        ]
-    )
+    init_args = parser.parse_args(["init"])
     report_args = parser.parse_args(["report"])
 
     assert init_args.command == "init"
     assert init_args.handler is _handle_init_workspace
+    assert init_args.workspace_id is None
     assert report_args.command == "report"
     assert report_args.handler is _handle_show_workspace_summary
     assert report_args.workspace_id is None
@@ -146,8 +157,6 @@ def test_register_command_parsers_wires_optimize_alias() -> None:
     args = parser.parse_args(
         [
             "optimize",
-            "--adapter",
-            "generic_command",
             "--config",
             "config.yaml",
         ]
@@ -156,6 +165,7 @@ def test_register_command_parsers_wires_optimize_alias() -> None:
     assert args.command == "optimize"
     assert args.handler is _handle_run_campaign
     assert args.workspace_id is None
+    assert args.adapter is None
 
 
 def test_register_command_parsers_wires_show_plan_file_command() -> None:

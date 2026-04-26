@@ -471,6 +471,10 @@ def _capture_run_environment(
 
 
 def _handle_run_benchmark(args: argparse.Namespace) -> int:
+    if not isinstance(args.adapter, str) or not args.adapter.strip():
+        raise SystemExit(
+            "`--adapter` is required unless provided by autoharness project config."
+        )
     try:
         adapter = get_adapter(args.adapter)
     except KeyError as exc:
@@ -711,6 +715,10 @@ def _handle_run_iteration(args: argparse.Namespace) -> int:
         root=args.root,
         requested_workspace_id=args.workspace_id,
     )
+    if not isinstance(args.adapter, str) or not args.adapter.strip():
+        raise SystemExit(
+            "`--adapter` is required unless provided by autoharness project config."
+        )
     workspace = load_workspace(args.root, args.workspace_id)
     state = load_workspace_state(args.root, args.workspace_id)
     _require_active_workspace_state(workspace_id=args.workspace_id, state=state)

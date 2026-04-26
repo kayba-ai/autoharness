@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 
+from pathlib import Path
+
 from .cli_registration import register_command_parsers
 
 
@@ -17,11 +19,11 @@ _TOP_LEVEL_DESCRIPTION = (
 )
 
 _TOP_LEVEL_EPILOG = """Common path:
-  autoharness setup --autonomy bounded --editable-surface src --editable-surface prompts
-  autoharness init --workspace-id demo --objective "Improve pass rate" --benchmark generic-smoke
-  autoharness run-benchmark --adapter generic_command --config benchmark.yaml --stage screening
-  autoharness generate-proposal --generator openai_responses --intervention-class source
-  autoharness optimize --generator openai_responses --intervention-class source
+  autoharness guide
+  autoharness setup
+  autoharness init
+  autoharness run-benchmark
+  autoharness optimize
   autoharness report
 
 Power-user surfaces remain available for background workers, root coordination,
@@ -38,6 +40,15 @@ def build_parser(
         description=_TOP_LEVEL_DESCRIPTION,
         epilog=_TOP_LEVEL_EPILOG,
         formatter_class=_TopLevelHelpFormatter,
+    )
+    parser.add_argument(
+        "--project-config",
+        type=Path,
+        default=None,
+        help=(
+            "Optional autoharness project config path. If omitted, autoharness "
+            "auto-discovers `autoharness.yaml` from the current directory upward."
+        ),
     )
     subparsers = parser.add_subparsers(
         dest="command",

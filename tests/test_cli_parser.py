@@ -26,9 +26,34 @@ def test_build_parser_top_level_help_surfaces_common_path() -> None:
 
     assert "Optimize an existing harness repo" in help_text
     assert "Common path:" in help_text
-    assert "autoharness init --workspace-id demo" in help_text
+    assert "autoharness guide" in help_text
+    assert "autoharness init" in help_text
     assert "autoharness optimize" in help_text
     assert "autoharness report" in help_text
+
+
+def test_build_parser_parses_global_project_config_and_guide_command() -> None:
+    parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
+
+    args = parser.parse_args(
+        [
+            "--project-config",
+            "autoharness.yaml",
+            "guide",
+            "--target-root",
+            "repo",
+            "--assistant",
+            "codex",
+            "--assistant-brief-path",
+            "autoharness.codex.md",
+        ]
+    )
+
+    assert args.project_config == Path("autoharness.yaml")
+    assert args.command == "guide"
+    assert args.target_root == Path("repo")
+    assert args.assistant == "codex"
+    assert args.assistant_brief_path == Path("autoharness.codex.md")
 
 
 def test_build_parser_parses_show_plan_file_arguments() -> None:
@@ -133,11 +158,16 @@ def test_build_parser_parses_background_campaign_arguments() -> None:
 def test_build_parser_allows_common_commands_without_workspace_id() -> None:
     parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
 
+    benchmark_args = parser.parse_args(
+        [
+            "run-benchmark",
+            "--config",
+            "config.yaml",
+        ]
+    )
     generate_args = parser.parse_args(
         [
             "generate-proposal",
-            "--adapter",
-            "generic_command",
             "--config",
             "config.yaml",
         ]
@@ -145,8 +175,6 @@ def test_build_parser_allows_common_commands_without_workspace_id() -> None:
     iteration_args = parser.parse_args(
         [
             "run-iteration",
-            "--adapter",
-            "generic_command",
             "--config",
             "config.yaml",
             "--hypothesis",
@@ -155,9 +183,7 @@ def test_build_parser_allows_common_commands_without_workspace_id() -> None:
     )
     campaign_args = parser.parse_args(
         [
-            "run-campaign",
-            "--adapter",
-            "generic_command",
+            "optimize",
             "--config",
             "config.yaml",
         ]
@@ -170,12 +196,17 @@ def test_build_parser_allows_common_commands_without_workspace_id() -> None:
         ]
     )
 
+    assert benchmark_args.command == "run-benchmark"
+    assert benchmark_args.adapter is None
     assert generate_args.command == "generate-proposal"
     assert generate_args.workspace_id is None
+    assert generate_args.adapter is None
     assert iteration_args.command == "run-iteration"
     assert iteration_args.workspace_id is None
-    assert campaign_args.command == "run-campaign"
+    assert iteration_args.adapter is None
+    assert campaign_args.command == "optimize"
     assert campaign_args.workspace_id is None
+    assert campaign_args.adapter is None
     assert compare_args.command == "compare-to-champion"
     assert compare_args.workspace_id is None
 
@@ -183,22 +214,12 @@ def test_build_parser_allows_common_commands_without_workspace_id() -> None:
 def test_build_parser_parses_init_and_report_aliases() -> None:
     parser = build_parser(run_planned_iteration_handler=_stub_run_planned_iteration)
 
-    init_args = parser.parse_args(
-        [
-            "init",
-            "--workspace-id",
-            "demo",
-            "--objective",
-            "Improve pass rate",
-            "--benchmark",
-            "generic-smoke",
-        ]
-    )
+    init_args = parser.parse_args(["init"])
     report_args = parser.parse_args(["report"])
 
     assert init_args.command == "init"
-    assert init_args.workspace_id == "demo"
-    assert init_args.benchmark == "generic-smoke"
+    assert init_args.workspace_id is None
+    assert init_args.benchmark is None
     assert report_args.command == "report"
     assert report_args.workspace_id is None
 

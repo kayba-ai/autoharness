@@ -25,6 +25,7 @@ python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 
 ## How It Works
 
+- `guide` inspects a repo and writes a starter `autoharness.yaml` plus benchmark config.
 - `setup` defines autonomy plus editable and protected surfaces.
 - `init` creates durable state for one optimization effort.
 - `run-benchmark` executes one benchmark directly.
@@ -44,61 +45,48 @@ python3 -m pip install --user "git+https://github.com/kayba-ai/autoharness.git"
 ## Batteries Included
 
 - Adapters: `generic_command`, `pytest`, `harbor`, `tau2_bench`, `hal`, `car_bench`
-- Proposal generators: `manual`, `failure_summary`, `local_template`, `local_command`, `openai_responses`
+- Proposal generators: `manual`, `failure_summary`, `local_template`, `local_command`, `openai_responses`, `codex_cli`, `claude_code`
 - Extension model: Python plugins can add generators, preflight checks, and search strategies from `.autoharness/plugins/` or `AUTOHARNESS_PLUGIN_PATHS`
 
 
 ## Quick Start
 
-Create a minimal benchmark config:
+Let autoharness generate a starter project config:
 
-```yaml
-benchmark_name: smoke
-workdir: .
-command: ["python", "-c", "print('ok')"]
+```bash
+autoharness guide
 ```
 
-Bootstrap a workspace and run the benchmark:
+If you want Codex or Claude to help you refine the setup, generate an assistant brief too:
+
+```bash
+autoharness guide --assistant codex
+# or
+autoharness guide --assistant claude
+```
+
+This writes `autoharness.codex.md` or `autoharness.claude.md` next to `autoharness.yaml`. Assistant wrapper prompts live under [`contrib/agents/`](contrib/agents/README.md).
+
+Then bootstrap the workspace and run the benchmark:
 
 ```bash
 autoharness setup --autonomy bounded --editable-surface src --editable-surface prompts
-autoharness init \
-  --workspace-id demo \
-  --objective "Improve pass rate without regressions" \
-  --benchmark generic-smoke
-autoharness run-benchmark \
-  --adapter generic_command \
-  --config benchmark.yaml \
-  --stage screening
+autoharness init
+autoharness run-benchmark
 ```
 
 Generate a proposal against a target harness root:
 
 ```bash
 export OPENAI_API_KEY=...
-autoharness generate-proposal \
-  --workspace-id demo \
-  --adapter generic_command \
-  --config benchmark.yaml \
-  --generator openai_responses \
-  --intervention-class source \
-  --target-root /path/to/harness \
-  --stage screening
+autoharness generate-proposal
 ```
 
 Run the outer loop:
 
 ```bash
-autoharness optimize \
-  --workspace-id demo \
-  --adapter generic_command \
-  --config benchmark.yaml \
-  --generator openai_responses \
-  --intervention-class source \
-  --target-root /path/to/harness \
-  --stage screening \
-  --max-iterations 10
-autoharness report --workspace-id demo
+autoharness optimize
+autoharness report
 ```
 
 ## Docs

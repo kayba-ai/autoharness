@@ -64,7 +64,7 @@ def register_proposal_parsers(subparsers) -> None:
         help="Preview and persist one proposal artifact without running the benchmark.",
     )
     _add_optional_workspace_id_argument(generate_proposal)
-    _add_required_adapter_argument(generate_proposal)
+    _add_required_adapter_argument(generate_proposal, required=False)
     _add_config_composition_arguments(
         generate_proposal,
         preset_help=(

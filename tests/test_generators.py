@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import yaml
 
+import autoharness.generators.assistant_cli_generator as assistant_cli_generator
 import autoharness.generators.openai_responses_generator as openai_responses_generator
 from autoharness.cli import main
 from autoharness.generators import ProposalGenerationRequest, get_generator
@@ -794,3 +796,221 @@ def test_local_command_generator_repairs_files_payload(
     assert generated.edit_plan.operations[0].path == "candidate.txt"
     assert "recovered_json_object_from_response_text" in generated.metadata["repair_steps"]
     assert "repaired_operations_payload" in generated.metadata["repair_steps"]
+
+
+def test_codex_cli_generator_invokes_codex_exec(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = tmp_path / ".autoharness" / "settings.yaml"
+    workspaces_root = tmp_path / ".autoharness" / "workspaces"
+    target_root = tmp_path / "candidate"
+    target_root.mkdir()
+    (target_root / "service.py").write_text("print('hello')\n", encoding="utf-8")
+
+    main(["setup", "--output", str(settings)])
+    main(
+        [
+            "init-workspace",
+            "--workspace-id",
+            "demo",
+            "--objective",
+            "Improve harness correctness",
+            "--benchmark",
+            "tau-bench-airline",
+            "--settings",
+            str(settings),
+            "--root",
+            str(workspaces_root),
+        ]
+    )
+
+    workspace = load_workspace(workspaces_root, "demo")
+    state = load_workspace_state(workspaces_root, "demo")
+    context = build_proposal_generation_context(
+        root=workspaces_root,
+        workspace=workspace,
+        state=state,
+        track_id="main",
+        adapter_id="generic_command",
+        stage="screening",
+        benchmark_target="tau-bench-airline",
+        selected_preset="search",
+        selected_preset_source="policy",
+        policy_preset="search",
+        effective_track_policy={
+            "search_benchmark": "tau-bench-airline",
+            "search_preset": "search",
+        },
+        effective_config={
+            "benchmark_name": "proposal-smoke",
+            "command": ["python", "-c", "print('ok')"],
+        },
+        target_root=target_root,
+    )
+
+    def fake_run(command, **kwargs):
+        assert command[:2] == ["codex", "exec"]
+        assert "--output-schema" in command
+        assert "--output-last-message" in command
+        assert "--sandbox" in command
+        assert command[-1] == "-"
+        prompt_text = kwargs["input"]
+        assert "proposal_input.json" in prompt_text
+        assert "service.py" not in prompt_text
+        schema_path = Path(command[command.index("--output-schema") + 1])
+        output_path = Path(command[command.index("--output-last-message") + 1])
+        input_dir = schema_path.parent
+        generator_input = json.loads(
+            (input_dir / "proposal_input.json").read_text(encoding="utf-8")
+        )
+        assert generator_input["assistant"] == "codex"
+        assert generator_input["context"]["workspace_id"] == "demo"
+        output_path.write_text(
+            json.dumps(
+                {
+                    "hypothesis": "Use Codex to refine routing",
+                    "summary": "Codex CLI proposal",
+                    "intervention_class": "source",
+                    "operations": [
+                        {
+                            "type": "write_file",
+                            "path": "candidate.txt",
+                            "content": "codex\n",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "progress\n", "")
+
+    monkeypatch.setattr(assistant_cli_generator.subprocess, "run", fake_run)
+
+    generator = get_generator("codex_cli")
+    generated = generator.generate(
+        context=context,
+        request=ProposalGenerationRequest(
+            format_version="autoharness.proposal_generation_request.v1",
+            candidate_index=8,
+            strategy_id="beam_interventions",
+            source_mode="generator_loop",
+            intervention_class="source",
+            metadata={"model": "gpt-5.5", "sandbox": "read-only"},
+        ),
+    )
+
+    assert generated.generator_id == "codex_cli"
+    assert generated.summary == "Codex CLI proposal"
+    assert generated.hypothesis == "Use Codex to refine routing"
+    assert generated.edit_plan.operations[0].path == "candidate.txt"
+    assert generated.metadata["assistant_id"] == "codex"
+    assert generated.metadata["provider"] == "codex_cli"
+    assert generated.metadata["generator_input_payload"]["request"]["candidate_index"] == 8
+
+
+def test_claude_code_generator_invokes_claude_print(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = tmp_path / ".autoharness" / "settings.yaml"
+    workspaces_root = tmp_path / ".autoharness" / "workspaces"
+    target_root = tmp_path / "candidate"
+    target_root.mkdir()
+    (target_root / "service.py").write_text("print('hello')\n", encoding="utf-8")
+
+    main(["setup", "--output", str(settings)])
+    main(
+        [
+            "init-workspace",
+            "--workspace-id",
+            "demo",
+            "--objective",
+            "Improve harness correctness",
+            "--benchmark",
+            "tau-bench-airline",
+            "--settings",
+            str(settings),
+            "--root",
+            str(workspaces_root),
+        ]
+    )
+
+    workspace = load_workspace(workspaces_root, "demo")
+    state = load_workspace_state(workspaces_root, "demo")
+    context = build_proposal_generation_context(
+        root=workspaces_root,
+        workspace=workspace,
+        state=state,
+        track_id="main",
+        adapter_id="generic_command",
+        stage="screening",
+        benchmark_target="tau-bench-airline",
+        selected_preset="search",
+        selected_preset_source="policy",
+        policy_preset="search",
+        effective_track_policy={
+            "search_benchmark": "tau-bench-airline",
+            "search_preset": "search",
+        },
+        effective_config={
+            "benchmark_name": "proposal-smoke",
+            "command": ["python", "-c", "print('ok')"],
+        },
+        target_root=target_root,
+    )
+
+    def fake_run(command, **kwargs):
+        assert command[0] == "claude"
+        assert "--print" in command
+        assert "--json-schema" in command
+        assert "--permission-mode" in command
+        schema_raw = command[command.index("--json-schema") + 1]
+        schema = json.loads(schema_raw)
+        assert schema["required"] == ["summary", "operations"]
+        prompt_text = command[-1]
+        assert "proposal_input.json" in prompt_text
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            json.dumps(
+                {
+                    "hypothesis": "Use Claude to tighten retries",
+                    "summary": "Claude Code proposal",
+                    "intervention_class": "config",
+                    "operations": [
+                        {
+                            "type": "search_replace",
+                            "path": "service.py",
+                            "search": "print('hello')\n",
+                            "replace": "print('hello world')\n",
+                            "expected_count": 1,
+                        }
+                    ],
+                }
+            ),
+            "",
+        )
+
+    monkeypatch.setattr(assistant_cli_generator.subprocess, "run", fake_run)
+
+    generator = get_generator("claude_code")
+    generated = generator.generate(
+        context=context,
+        request=ProposalGenerationRequest(
+            format_version="autoharness.proposal_generation_request.v1",
+            candidate_index=9,
+            strategy_id="beam_interventions",
+            source_mode="generator_loop",
+            intervention_class="config",
+            metadata={"model": "sonnet", "effort": "high"},
+        ),
+    )
+
+    assert generated.generator_id == "claude_code"
+    assert generated.summary == "Claude Code proposal"
+    assert generated.hypothesis == "Use Claude to tighten retries"
+    assert generated.intervention_class == "config"
+    assert generated.edit_plan.operations[0].type == "search_replace"
+    assert generated.metadata["assistant_id"] == "claude"
+    assert generated.metadata["provider"] == "claude_code"
