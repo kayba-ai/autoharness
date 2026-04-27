@@ -12,13 +12,10 @@
   <a href="https://kayba.ai">
     <img src="https://img.shields.io/badge/kayba.ai-0B1220?style=flat&labelColor=0B1220&color=0B1220" alt="kayba.ai">
   </a>
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT license">
   <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/Codex-supported-111111" alt="Codex supported">
-  <img src="https://img.shields.io/badge/Claude%20Code-supported-D97706" alt="Claude Code supported">
+  <img src="https://img.shields.io/badge/Codex-supported-2563EB" alt="Codex supported">
+  <img src="https://img.shields.io/badge/Claude%20Code-supported-2563EB" alt="Claude Code supported">
 </p>
 
 # autoharness
