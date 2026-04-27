@@ -2,6 +2,18 @@
   <img src="docs/images/harness_on_harness2.png" alt="autoharness banner" width="900">
 </p>
 
+<p align="center">
+  <a href="https://discord.com/invite/mqCqH7sTyK">
+    <img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord">
+  </a>
+  <a href="https://x.com/kaybaai">
+    <img src="https://img.shields.io/badge/Twitter-Follow-111111?logo=x&logoColor=white" alt="Twitter Follow">
+  </a>
+  <a href="https://kayba.ai">
+    <img src="https://img.shields.io/badge/kayba.ai-Visit%20Website-0f172a?logo=googlechrome&logoColor=white" alt="kayba.ai">
+  </a>
+</p>
+
 # autoharness
 
 Let autoharness run overnight and come back to an optimized agent harness, so your production agents never make mistakes again.
@@ -129,3 +141,10 @@ Example from one `tau2` airline benchmark study. Relative deltas are measured ag
 - Retention policies, pruning, and portable report and bundle exports
 - Event logs, inspection commands, and operational reporting surfaces
 - Python plugin hooks for generators, preflight checks, and search strategies
+
+> [!TIP]
+> Want deeper analysis or a custom optimization workflow? [Kayba](https://kayba.ai) offers managed harness optimization and agent-improvement support tailored to your stack.
+
+Star this repo if you find it useful!
+
+Built with ❤️ by Kayba and the open-source community.
