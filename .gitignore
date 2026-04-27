@@ -3,3 +3,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .autoharness/
+.codex
+autoharness.project.md
+benchmarks/
