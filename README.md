@@ -4,14 +4,21 @@
 
 <p align="center">
   <a href="https://discord.com/invite/mqCqH7sTyK">
-    <img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white" alt="Discord">
+    <img src="https://img.shields.io/discord/1429935408145236131?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord">
   </a>
   <a href="https://x.com/kaybaai">
-    <img src="https://img.shields.io/badge/Twitter-Follow-111111?logo=x&logoColor=white" alt="Twitter Follow">
+    <img src="https://img.shields.io/twitter/follow/kaybaai?style=social" alt="Twitter Follow">
   </a>
   <a href="https://kayba.ai">
-    <img src="https://img.shields.io/badge/kayba.ai-Visit%20Website-0f172a?logo=googlechrome&logoColor=white" alt="kayba.ai">
+    <img src="https://img.shields.io/badge/kayba.ai-0B1220?style=flat&labelColor=0B1220&color=0B1220" alt="kayba.ai">
   </a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT license">
+  <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/Codex-supported-111111" alt="Codex supported">
+  <img src="https://img.shields.io/badge/Claude%20Code-supported-D97706" alt="Claude Code supported">
 </p>
 
 # autoharness
@@ -145,6 +152,10 @@ Example from one `tau2` airline benchmark study. Relative deltas are measured ag
 > [!TIP]
 > Want deeper analysis or a custom optimization workflow? [Kayba](https://kayba.ai) offers managed harness optimization and agent-improvement support tailored to your stack.
 
-Star this repo if you find it useful!
+<p align="center">
+  <strong>Star this repo if you find it useful!</strong>
+</p>
 
-Built with ❤️ by Kayba and the open-source community.
+<p align="center">
+  <strong>Built with ❤️ by <a href="https://kayba.ai">Kayba</a> and the open-source community.</strong>
+</p>
